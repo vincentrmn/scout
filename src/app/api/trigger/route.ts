@@ -29,7 +29,9 @@ export async function POST(req: NextRequest) {
   }
 
   // URL de callback que n8n appellera pour deposer les resultats
-  const base = req.nextUrl.origin;
+  const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || req.nextUrl.host;
+  const proto = req.headers.get('x-forwarded-proto') || 'https';
+  const base = process.env.PUBLIC_APP_URL || `${proto}://${host}`;
   const payload = {
     runId,
     criteria: config.criteria,
