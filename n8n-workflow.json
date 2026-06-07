@@ -1,0 +1,126 @@
+{
+  "name": "BBInvest — atHome scraper",
+  "nodes": [
+    {
+      "parameters": { "httpMethod": "POST", "path": "scout-search", "responseMode": "onReceived" },
+      "id": "webhook",
+      "name": "Webhook depuis app",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "\nconst b = $json.body || $json;\nconst c = b.criteria || {};\n\n// criteria.locCodes (array of atHome loc codes, e.g. [\"L10-belair\",\"L10-merl\"])\n// is the canonical shape since BBInvest S2 (zones model).\n// Multiple codes are joined by comma -> atHome accepts loc=L10-a,L10-b natively.\n// Backward compat: criteria.loc (string), and criteria.communes[0] (legacy Sprint 1).\nfunction pickLoc() {\n  if (Array.isArray(c.locCodes) && c.locCodes.length) {\n    return c.locCodes\n      .map(s => String(s).trim())\n      .filter(Boolean)\n      .join(',');\n  }\n  if (c.loc) return c.loc;\n  const first = (c.communes && c.communes[0]) || '';\n  if (/^l\\d+-/i.test(first)) return first.replace(/^l/i, 'L');\n  return null;\n}\nconst loc = pickLoc();\n\nconst APT_PTYPES = 'flat,4,7,5,6,42,32,41,43';\nconst HOUSE_PTYPES = 'house';\n\nconst pairs = [];\nconst add = (k, v) => { if (v !== undefined && v !== null && v !== '') pairs.push(k + '=' + String(v)); };\nadd('tr', 'buy');\nadd('ptypes', c.propertyType === 'house' ? HOUSE_PTYPES : APT_PTYPES);\nadd('srf_min', c.surfaceMin);\nadd('srf_max', c.surfaceMax);\nadd('price_min', c.priceMin);\nadd('price_max', c.priceMax);\nadd('bedrooms_min', c.bedroomsMin);\nadd('old_build', 'true');\nif (loc) add('loc', loc);\nadd('page', c.page || '1');\nconst url = 'https://www.athome.lu/srp/?' + pairs.join('&');\nreturn [{ json: { runId: b.runId, ingestUrl: b.ingestUrl, ingestSecret: b.ingestSecret, criteria: c, searchUrl: url } }];\n"
+      },
+      "id": "buildurl",
+      "name": "Construit URL SRP",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.searchUrl }}",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": { "parameters": [
+          { "name": "User-Agent", "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36" },
+          { "name": "Accept-Language", "value": "fr-FR,fr;q=0.9" },
+          { "name": "Accept", "value": "text/html,application/xhtml+xml" }
+        ] },
+        "options": { "response": { "response": { "responseFormat": "text" } } }
+      },
+      "id": "getlist",
+      "name": "GET liste SRP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "\nconst ctx = $('Construit URL SRP').first().json;\nconst c = ctx.criteria || {};\nconst html = $json.data || $json.body || '';\n\nfunction extractState(html) {\n  const mi = html.indexOf('window.__INITIAL_STATE__');\n  if (mi === -1) throw new Error('INITIAL_STATE introuvable (page bloquee ou structure changee)');\n  let i = html.indexOf('=', mi) + 1;\n  while (/\\s/.test(html[i])) i++;\n  const s = i; let depth = 0, inStr = false, esc = false;\n  for (; i < html.length; i++) {\n    const ch = html[i];\n    if (esc) { esc = false; continue; }\n    if (ch === '\\\\') { esc = true; continue; }\n    if (ch === '\"') { inStr = !inStr; continue; }\n    if (inStr) continue;\n    if (ch === '{') depth++;\n    else if (ch === '}') { depth--; if (depth === 0) { i++; break; } }\n  }\n  return JSON.parse(html.slice(s, i).replace(/:\\s*undefined/g, ': null'));\n}\n\nconst state = extractState(html);\nconst list = (state.search && state.search.list) || [];\nconst listings = (state.search && state.search.listings) || [];\nconst total = (state.search && state.search.total) || list.length;\nconst permById = {};\nfor (const x of listings) permById[x.id] = x.permalink && x.permalink.fr;\n\nconst kw = (c.keywords || []).map(k => k.toLowerCase());\n\nlet countSold = 0, countNew = 0, countNoKw = 0;\nconst out = [];\nfor (const a of list) {\n  if (a.isSoldProperty) { countSold++; continue; }\n  if (a.isNewBuild) { countNew++; continue; }\n  const desc = (a.description || '').toLowerCase();\n  if (kw.length && !kw.some(k => desc.includes(k))) { countNoKw++; continue; }\n  out.push({\n    runId: ctx.runId,\n    ingestUrl: ctx.ingestUrl,\n    ingestSecret: ctx.ingestSecret,\n    cpeClasses: c.cpeClasses || [],\n    id: String(a.id),\n    price: a.price,\n    surface: a.propertySurface,\n    commune: (a.geo && a.geo.cityName) || '',\n    rooms: a.bedroomsCount,\n    title: (a.title || '').toString(),\n    url: 'https://www.athome.lu' + (permById[a.id] || ('/vente/appartement/luxembourg/id-' + a.id + '.html')),\n    _stats: { total, pageCount: list.length, countSold, countNew, countNoKw },\n  });\n}\n\nif (out.length === 0) {\n  return [{ json: { _empty: true, runId: ctx.runId, ingestUrl: ctx.ingestUrl, ingestSecret: ctx.ingestSecret, _stats: { total, pageCount: list.length, countSold, countNew, countNoKw } } }];\n}\nreturn out.map(json => ({ json }));\n"
+      },
+      "id": "parselist",
+      "name": "Parse + filtre liste",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.url }}",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": { "parameters": [
+          { "name": "User-Agent", "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36" },
+          { "name": "Accept-Language", "value": "fr-FR,fr;q=0.9" }
+        ] },
+        "options": {
+          "batching": { "batch": { "batchSize": 1, "batchInterval": 2500 } },
+          "response": { "response": { "responseFormat": "text" } }
+        }
+      },
+      "id": "getdetail",
+      "name": "GET fiche detail",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "\nif ($json._empty) return $json;\nconst meta = $('Parse + filtre liste').item.json;\nconst html = $json.data || $json.body || '';\nconst norm = html.replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ');\nconst m = norm.match(/Classe\\s+[\\u00e9e]nerg[\\u00e9e]?tique[^A-Za-z]{0,40}?([A-I])\\b/i);\nconst cpe = m ? m[1].toUpperCase() : null;\nconst classes = meta.cpeClasses || [];\nconst keep = !classes.length || (cpe && classes.includes(cpe));\nreturn { ...meta, cpe, _keep: keep };\n"
+      },
+      "id": "extractcpe",
+      "name": "Extrait CPE + filtre",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "\nconst all = $input.all().map(i => i.json);\nconst first = $('Construit URL SRP').first().json;\nconst kept = all.filter(x => x._keep);\nconst listings = kept.map(({ runId, ingestUrl, ingestSecret, cpeClasses, _keep, _empty, _stats, ...rest }) => rest);\nreturn [{ json: { ingestUrl: first.ingestUrl, runId: first.runId, ingestSecret: first.ingestSecret, listings } }];\n"
+      },
+      "id": "aggregate",
+      "name": "Agrege resultats",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.ingestUrl }}",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ runId: $json.runId, secret: $json.ingestSecret, listings: $json.listings }) }}"
+      },
+      "id": "ingest",
+      "name": "POST vers app",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [1780, 300]
+    }
+  ],
+  "connections": {
+    "Webhook depuis app": { "main": [[{ "node": "Construit URL SRP", "type": "main", "index": 0 }]] },
+    "Construit URL SRP": { "main": [[{ "node": "GET liste SRP", "type": "main", "index": 0 }]] },
+    "GET liste SRP": { "main": [[{ "node": "Parse + filtre liste", "type": "main", "index": 0 }]] },
+    "Parse + filtre liste": { "main": [[{ "node": "GET fiche detail", "type": "main", "index": 0 }]] },
+    "GET fiche detail": { "main": [[{ "node": "Extrait CPE + filtre", "type": "main", "index": 0 }]] },
+    "Extrait CPE + filtre": { "main": [[{ "node": "Agrege resultats", "type": "main", "index": 0 }]] },
+    "Agrege resultats": { "main": [[{ "node": "POST vers app", "type": "main", "index": 0 }]] }
+  },
+  "settings": {}
+}
