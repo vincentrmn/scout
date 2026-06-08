@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   await ensureSchema();
   const { rows } = await pool.query(
-    `SELECT id, name, criteria, scoring, created_at, updated_at
+    `SELECT id, name, criteria, scoring, watch_enabled, created_at, updated_at
      FROM configs ORDER BY updated_at DESC`
   );
   return NextResponse.json(rows);

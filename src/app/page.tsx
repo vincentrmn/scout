@@ -2,7 +2,13 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-type Cfg = { id: number; name: string; criteria: any; updated_at: string };
+type Cfg = {
+  id: number;
+  name: string;
+  criteria: any;
+  updated_at: string;
+  watch_enabled?: boolean;
+};
 type Run = {
   id: number;
   config_name: string;
@@ -62,6 +68,18 @@ export default function Dashboard() {
     load();
   }
 
+  // S6 Phase 2 — bascule la veille (optimiste)
+  async function toggleWatch(id: number, current: boolean) {
+    setConfigs((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, watch_enabled: !current } : c))
+    );
+    await fetch("/api/configs/watch", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id, watch_enabled: !current }),
+    }).catch(() => {});
+  }
+
   async function logout() {
     await fetch("/api/logout", { method: "POST" });
     router.push("/login");
@@ -102,7 +120,23 @@ export default function Dashboard() {
                 {c.criteria?.includeNew ? " · neuf inclus" : ""} · {summarizeZones(c.criteria)}
               </div>
             </div>
-            <div className="row" style={{ flex: "0 0 auto" }}>
+            <div className="row" style={{ flex: "0 0 auto", alignItems: "center" }}>
+              <label
+                title="Veille : scan automatique chaque matin à 7h"
+                style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none", marginRight: 4 }}
+              >
+                <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--ink-soft)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                  Veille
+                </span>
+                <span className="toggle-switch">
+                  <input
+                    type="checkbox"
+                    checked={!!c.watch_enabled}
+                    onChange={() => toggleWatch(c.id, !!c.watch_enabled)}
+                  />
+                  <span className="toggle-switch__slider" />
+                </span>
+              </label>
               <button className="btn" onClick={() => relancer(c.id)} disabled={busy === c.id}>
                 {busy === c.id ? "..." : "Relancer"}
               </button>

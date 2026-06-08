@@ -14,8 +14,8 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // /api/ingest est appele par n8n : protege par son propre secret, pas par le cookie
-  if (pathname === "/api/ingest") {
+  // Appeles par n8n : proteges par leur propre secret, pas par le cookie.
+  if (pathname === "/api/ingest" || pathname === "/api/cron/run-all") {
     return NextResponse.next();
   }
 

@@ -17,7 +17,6 @@ export const pool =
 
 if (process.env.NODE_ENV !== "production") global._bbinvestPool = pool;
 
-// Cree les tables au premier appel, une seule fois par process.
 export function ensureSchema(): Promise<void> {
   if (!global._bbinvestSchema) {
     global._bbinvestSchema = (async () => {
@@ -31,6 +30,11 @@ export function ensureSchema(): Promise<void> {
           updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
         );
       `);
+      // S6 Phase 2 — veille : la config tourne-t-elle automatiquement chaque matin ?
+      await pool.query(
+        `ALTER TABLE configs ADD COLUMN IF NOT EXISTS watch_enabled BOOLEAN NOT NULL DEFAULT false;`
+      );
+
       await pool.query(`
         CREATE TABLE IF NOT EXISTS runs (
           id          SERIAL PRIMARY KEY,
@@ -47,13 +51,13 @@ export function ensureSchema(): Promise<void> {
 
       // S3 — stats du run (totalAtHome, pages, exclusions, capped) remontees par n8n.
       await pool.query(`ALTER TABLE runs ADD COLUMN IF NOT EXISTS stats JSONB;`);
+      // S6 Phase 2 — run issu de la veille planifiee (=> source des Nouveautes).
+      await pool.query(`ALTER TABLE runs ADD COLUMN IF NOT EXISTS is_watch BOOLEAN NOT NULL DEFAULT false;`);
 
       await pool.query(`CREATE INDEX IF NOT EXISTS runs_started_idx ON runs (started_at DESC);`);
 
       // -------------------------------------------------------------------
-      // Zones (S2) : villes (parent_id NULL, loc_code = code "tout ville")
-      // et quartiers (parent_id = id ville, loc_code = code quartier).
-      // S2.1 : q_code (token atHome). S4 : resale_eur_per_m2 (prix de revente).
+      // Zones (S2/S4)
       // -------------------------------------------------------------------
       await pool.query(`
         CREATE TABLE IF NOT EXISTS zones (
@@ -66,18 +70,12 @@ export function ensureSchema(): Promise<void> {
           created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
         );
       `);
-
-      // Migrations idempotentes (installations deja deployees).
       await pool.query(`ALTER TABLE zones ADD COLUMN IF NOT EXISTS q_code TEXT;`);
-      // S4 — prix de revente cible au m2, par zone.
       await pool.query(`ALTER TABLE zones ADD COLUMN IF NOT EXISTS resale_eur_per_m2 NUMERIC;`);
 
-      const { rows } = await pool.query<{ n: number }>(
-        `SELECT COUNT(*)::int AS n FROM zones`
-      );
+      const { rows } = await pool.query<{ n: number }>(`SELECT COUNT(*)::int AS n FROM zones`);
 
       if (rows[0].n === 0) {
-        // Seed initial : Luxembourg-Ville + 26 quartiers, avec leur q_code atHome.
         await pool.query(`
           INSERT INTO zones (id, parent_id, label, loc_code, q_code, sort_order) VALUES
             ('lux-ville',      NULL,        'Luxembourg-Ville',           'L9-luxembourg',              '33e38b1b',  0),
@@ -109,50 +107,26 @@ export function ensureSchema(): Promise<void> {
             ('weimerskirch',   'lux-ville', 'Weimerskirch',               'L10-weimerskirch',           'fa0760ad', 26)
         `);
       } else {
-        // Backfill idempotent du q_code (installations S2.0).
         await pool.query(`
           UPDATE zones SET q_code = src.q FROM (VALUES
-            ('lux-ville',      '33e38b1b'),
-            ('beggen',         '119ebefe'),
-            ('belair',         'f37c45a0'),
-            ('bonnevoie',      'fd3cdbc5'),
-            ('centre-ville',   'a95e09da'),
-            ('cents',          '4d568d61'),
-            ('cessange',       'a7f77075'),
-            ('clausen',        'b4ebf238'),
-            ('dommeldange',    'f20d2a31'),
-            ('eich',           'c02c656a'),
-            ('gare',           '08ecb2d2'),
-            ('gasperich',      '5c12d5b4'),
-            ('grund',          'c09d83fb'),
-            ('hamm',           'd0270c69'),
-            ('hollerich',      '025ab94b'),
-            ('kirchberg',      'dea70e87'),
-            ('kohlenberg',     'fece382b'),
-            ('limpertsberg',   'a2d9b00c'),
-            ('merl',           '6ee95216'),
-            ('muhlenbach',     '67c33ee9'),
-            ('neudorf',        '77eec8cb'),
-            ('pfaffenthal',    '7eed7bed'),
-            ('pulvermuhle',    'f29b2f97'),
-            ('rollingergrund', 'f9c49c4e'),
-            ('verlorenkost',   'afa0f7d6'),
-            ('weimershof',     'c683adc1'),
-            ('weimerskirch',   'fa0760ad')
+            ('lux-ville','33e38b1b'),('beggen','119ebefe'),('belair','f37c45a0'),('bonnevoie','fd3cdbc5'),
+            ('centre-ville','a95e09da'),('cents','4d568d61'),('cessange','a7f77075'),('clausen','b4ebf238'),
+            ('dommeldange','f20d2a31'),('eich','c02c656a'),('gare','08ecb2d2'),('gasperich','5c12d5b4'),
+            ('grund','c09d83fb'),('hamm','d0270c69'),('hollerich','025ab94b'),('kirchberg','dea70e87'),
+            ('kohlenberg','fece382b'),('limpertsberg','a2d9b00c'),('merl','6ee95216'),('muhlenbach','67c33ee9'),
+            ('neudorf','77eec8cb'),('pfaffenthal','7eed7bed'),('pulvermuhle','f29b2f97'),('rollingergrund','f9c49c4e'),
+            ('verlorenkost','afa0f7d6'),('weimershof','c683adc1'),('weimerskirch','fa0760ad')
           ) AS src(id, q)
-          WHERE zones.id = src.id
-            AND (zones.q_code IS NULL OR zones.q_code <> src.q);
+          WHERE zones.id = src.id AND (zones.q_code IS NULL OR zones.q_code <> src.q);
         `);
       }
 
-      // S4 — prix de revente par defaut (porte par la ville Luxembourg-Ville).
       await pool.query(
-        `UPDATE zones SET resale_eur_per_m2 = 11000
-         WHERE id = 'lux-ville' AND resale_eur_per_m2 IS NULL;`
+        `UPDATE zones SET resale_eur_per_m2 = 11000 WHERE id = 'lux-ville' AND resale_eur_per_m2 IS NULL;`
       );
 
       // -------------------------------------------------------------------
-      // S5 — Listings : persistance cross-run des biens scrapes.
+      // S5 — Listings (persistance cross-run)
       // -------------------------------------------------------------------
       await pool.query(`
         CREATE TABLE IF NOT EXISTS listings (
@@ -176,8 +150,7 @@ export function ensureSchema(): Promise<void> {
       );
 
       // -------------------------------------------------------------------
-      // S6 Phase 1 — Historique de prix. Un snapshot par changement de prix
-      // (ou a la premiere apparition). Permet de tracer l'evolution dans Suivis.
+      // S6 Phase 1 — Historique de prix
       // -------------------------------------------------------------------
       await pool.query(`
         CREATE TABLE IF NOT EXISTS listing_snapshots (
@@ -188,8 +161,7 @@ export function ensureSchema(): Promise<void> {
         );
       `);
       await pool.query(
-        `CREATE INDEX IF NOT EXISTS listing_snapshots_listing_idx
-         ON listing_snapshots (listing_id, seen_at);`
+        `CREATE INDEX IF NOT EXISTS listing_snapshots_listing_idx ON listing_snapshots (listing_id, seen_at);`
       );
     })();
   }
