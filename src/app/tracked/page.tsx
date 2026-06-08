@@ -24,22 +24,33 @@ const daysSince = (iso: string) =>
 
 export default function TrackedPage() {
   const [listings, setListings] = useState<TrackedListing[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const load = async () => {
-    const r = await fetch("/api/listings?tracked=1").then((x) => x.json());
-    setListings(Array.isArray(r) ? r : []);
+    setError(null);
+    try {
+      const res = await fetch("/api/listings?tracked=1");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      const r = await res.json();
+      setListings(Array.isArray(r) ? r : []);
+    } catch (e: any) {
+      setError(e?.message ?? "Erreur inconnue");
+      setListings(null);
+    }
   };
 
   useEffect(() => { load(); }, []);
 
   const untrack = async (id: string) => {
-    // Mise a jour optimiste : retire immediatement de la liste
     setListings((prev) => (prev ? prev.filter((x) => x.id !== id) : prev));
     await fetch("/api/listings/track", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, tracked: false }),
-    });
+    }).catch(() => {});
   };
 
   return (
@@ -52,14 +63,35 @@ export default function TrackedPage() {
         <a className="btn ghost" href="/">← Retour</a>
       </div>
 
-      {listings === null && <p className="empty">Chargement…</p>}
+      {/* Chargement */}
+      {listings === null && error === null && (
+        <p className="empty">Chargement…</p>
+      )}
 
+      {/* Erreur */}
+      {error !== null && (
+        <div className="card">
+          <p className="error" style={{ margin: 0 }}>
+            Erreur : {error}
+          </p>
+          <button
+            className="btn ghost"
+            onClick={load}
+            style={{ marginTop: 12 }}
+          >
+            Réessayer
+          </button>
+        </div>
+      )}
+
+      {/* Vide */}
       {listings !== null && listings.length === 0 && (
         <p className="empty">
           Aucun bien suivi pour l'instant. Étoilez des biens depuis une page de résultats.
         </p>
       )}
 
+      {/* Liste */}
       {listings !== null && listings.length > 0 && (
         <div className="card" style={{ padding: 0, overflowX: "auto" }}>
           <table>
