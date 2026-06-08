@@ -51,7 +51,7 @@ h3 { font-weight: 600; }
 .brand::before {
   content: "";
   display: inline-block;
-  width: 72px; height: 30px;
+  width: 130px; height: 54px;
   flex-shrink: 0;
   background: url('/brouwers-logo.svg') left center / contain no-repeat;
 }
