@@ -5,18 +5,38 @@ import ZonePicker from "./ZonePicker";
 
 const CPE = ["A", "B", "C", "D", "E", "F", "G", "H", "I"];
 
+/** Interrupteur reutilisable, base sur le markup .toggle-switch de globals.css. */
+function Toggle({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <label className="toggle-switch">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span className="toggle-switch__slider" />
+    </label>
+  );
+}
+
 export default function NewSearch() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [propertyType, setPropertyType] = useState("apartment");
+  // S3 — false = bien existant uniquement (defaut), true = neuf inclus.
+  const [includeNew, setIncludeNew] = useState(false);
   // Défaut : tout Luxembourg-Ville activé via le toggle
   const [locCodes, setLocCodes] = useState<string[]>(["L9-luxembourg"]);
   const [surfaceMin, setSurfaceMin] = useState("");
   const [surfaceMax, setSurfaceMax] = useState("50");
   const [priceMin, setPriceMin] = useState("");
   const [priceMax, setPriceMax] = useState("");
-  const [cpe, setCpe] = useState<string[]>(["F", "G", "H", "I"]);
-  const [keywords, setKeywords] = useState("a renover, travaux, rafraichir");
+  // S3 — toggle "Toutes les notes CPE" ON par defaut (cpeClasses = []).
+  // Quand OFF, les chips A-I s'affichent toutes pre-cochees et on peut decocher.
+  const [allCpe, setAllCpe] = useState(true);
+  const [cpe, setCpe] = useState<string[]>([...CPE]);
 
   // scoring
   const [resaleEurPerM2, setResale] = useState("11000");
@@ -39,12 +59,13 @@ export default function NewSearch() {
       criteria: {
         propertyType,
         locCodes,
+        includeNew,
         surfaceMin: num(surfaceMin),
         surfaceMax: num(surfaceMax),
         priceMin: num(priceMin),
         priceMax: num(priceMax),
-        cpeClasses: cpe,
-        keywords: keywords.split(",").map((s) => s.trim()).filter(Boolean),
+        // [] si "Toutes les notes CPE" ON, sinon les classes cochees.
+        cpeClasses: allCpe ? [] : cpe,
       },
       scoring: {
         resaleEurPerM2: Number(resaleEurPerM2),
@@ -59,6 +80,10 @@ export default function NewSearch() {
   async function save(thenRun: boolean) {
     if (locCodes.length === 0) {
       setErr("Sélectionne au moins une zone (toggle « Tout » ou un ou plusieurs quartiers).");
+      return;
+    }
+    if (!allCpe && cpe.length === 0) {
+      setErr("Sélectionne au moins une note CPE, ou réactive « Toutes les notes CPE ».");
       return;
     }
     setBusy(true);
@@ -103,6 +128,18 @@ export default function NewSearch() {
         <label>Nom de la recherche</label>
         <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex : F+ < 50m² Luxembourg-ville" />
 
+        <div className="zone-picker__toggle-row" style={{ marginTop: 18, borderBottom: "none", paddingBottom: 0, marginBottom: 0 }}>
+          <Toggle checked={includeNew} onChange={setIncludeNew} />
+          <span className="zone-picker__toggle-label">
+            {includeNew ? "Tous les biens (neuf inclus)" : "Bien existant uniquement"}
+          </span>
+        </div>
+        {includeNew && (
+          <p className="zone-picker__hint" style={{ marginTop: 6 }}>
+            Inclut les programmes neufs en construction. Sans filtre CPE côté atHome, une recherche large peut être plus lente.
+          </p>
+        )}
+
         <div className="row" style={{ marginTop: 16 }}>
           <div>
             <label>Type de bien</label>
@@ -127,17 +164,18 @@ export default function NewSearch() {
         </div>
 
         <div style={{ marginTop: 16 }}>
-          <label>Classes énergétiques à retenir</label>
-          <div className="chips">
-            {CPE.map((c) => (
-              <span key={c} className={`chip ${cpe.includes(c) ? "on" : ""}`} onClick={() => toggleCpe(c)}>{c}</span>
-            ))}
+          <label>Classes énergétiques</label>
+          <div className="zone-picker__toggle-row" style={{ borderBottom: "none", paddingBottom: 0, marginBottom: 0 }}>
+            <Toggle checked={allCpe} onChange={setAllCpe} />
+            <span className="zone-picker__toggle-label">Toutes les notes CPE</span>
           </div>
-        </div>
-
-        <div style={{ marginTop: 16 }}>
-          <label>Mots-clés "travaux" (séparés par virgule)</label>
-          <input type="text" value={keywords} onChange={(e) => setKeywords(e.target.value)} />
+          {!allCpe && (
+            <div className="chips" style={{ marginTop: 12 }}>
+              {CPE.map((c) => (
+                <span key={c} className={`chip ${cpe.includes(c) ? "on" : ""}`} onClick={() => toggleCpe(c)}>{c}</span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
