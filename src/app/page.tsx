@@ -68,7 +68,6 @@ export default function Dashboard() {
     load();
   }
 
-  // S6 Phase 2 — bascule la veille (optimiste)
   async function toggleWatch(id: number, current: boolean) {
     setConfigs((prev) =>
       prev.map((c) => (c.id === id ? { ...c, watch_enabled: !current } : c))
@@ -92,6 +91,7 @@ export default function Dashboard() {
           <span className="dot" />
         </div>
         <div className="row" style={{ flex: "0 0 auto", alignItems: "center" }}>
+          <a className="btn ghost" href="/nouveautes">✨ Nouveautés</a>
           <a className="btn ghost" href="/tracked">★ Suivis</a>
           <a className="btn ghost" href="/settings">⚙ Prix de revente</a>
           <button className="btn ghost" onClick={logout}>Déconnexion</button>
