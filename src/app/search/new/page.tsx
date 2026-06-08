@@ -34,16 +34,15 @@ export default function NewSearch() {
   const [priceMin, setPriceMin] = useState("");
   const [priceMax, setPriceMax] = useState("");
   // S3 — toggle "Toutes les notes CPE" ON par defaut (cpeClasses = []).
-  // Quand OFF, les chips A-I s'affichent toutes pre-cochees et on peut decocher.
   const [allCpe, setAllCpe] = useState(true);
   const [cpe, setCpe] = useState<string[]>([...CPE]);
 
-  // scoring
-  const [resaleEurPerM2, setResale] = useState("11000");
+  // scoring — S4 : le prix de revente n'est plus ici (calibre par zone dans Reglages).
   const [worksEurPerM2, setWorks] = useState("1500");
-  const [notaryPct, setNotary] = useState("7");
+  const [worksVatPct, setWorksVat] = useState("17");
+  const [notaryPct, setNotary] = useState("8");
   const [resaleAgencyPct, setAgency] = useState("3");
-  const [targetMarginPct, setMargin] = useState("20");
+  const [targetMarginPct, setMargin] = useState("15");
 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -64,12 +63,11 @@ export default function NewSearch() {
         surfaceMax: num(surfaceMax),
         priceMin: num(priceMin),
         priceMax: num(priceMax),
-        // [] si "Toutes les notes CPE" ON, sinon les classes cochees.
         cpeClasses: allCpe ? [] : cpe,
       },
       scoring: {
-        resaleEurPerM2: Number(resaleEurPerM2),
         worksEurPerM2: Number(worksEurPerM2),
+        worksVatPct: Number(worksVatPct) / 100,
         notaryPct: Number(notaryPct) / 100,
         resaleAgencyPct: Number(resaleAgencyPct) / 100,
         targetMarginPct: Number(targetMarginPct) / 100,
@@ -185,16 +183,17 @@ export default function NewSearch() {
       </div>
       <div className="card">
         <div className="row">
-          <div><label>Revente cible (€/m²)</label><input type="number" value={resaleEurPerM2} onChange={(e) => setResale(e.target.value)} /></div>
           <div><label>Travaux (€/m²)</label><input type="number" value={worksEurPerM2} onChange={(e) => setWorks(e.target.value)} /></div>
+          <div><label>TVA travaux (%)</label><input type="number" value={worksVatPct} onChange={(e) => setWorksVat(e.target.value)} /></div>
         </div>
         <div className="row" style={{ marginTop: 16 }}>
           <div><label>Frais acquisition (%)</label><input type="number" value={notaryPct} onChange={(e) => setNotary(e.target.value)} /></div>
           <div><label>Frais revente (%)</label><input type="number" value={resaleAgencyPct} onChange={(e) => setAgency(e.target.value)} /></div>
-          <div><label>Marge nette cible (%)</label><input type="number" value={targetMarginPct} onChange={(e) => setMargin(e.target.value)} /></div>
+          <div><label>Marge brute cible (%)</label><input type="number" value={targetMarginPct} onChange={(e) => setMargin(e.target.value)} /></div>
         </div>
         <p className="muted" style={{ fontSize: "0.82rem", marginBottom: 0 }}>
-          Le verdict GO / NÉGOCIER / PASS et le prix d'achat max sont recalculés à chaque run à partir de ces valeurs.
+          Le prix de revente au m² est calibré par quartier dans <a href="/settings">Prix de revente</a>.
+          Le verdict GO / NÉGOCIER / PASS et le prix d'achat max sont recalculés à chaque run.
         </p>
       </div>
 

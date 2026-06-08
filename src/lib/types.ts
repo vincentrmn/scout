@@ -7,23 +7,18 @@ export type Criteria = {
    *  Plusieurs codes sont joints par virgule cote n8n (param atHome `loc=L10-a,L10-b`). */
   locCodes?: string[];
   /** S2.1 — tokens q atHome paralleles a locCodes (meme ordre, meme taille).
-   *  Calcules automatiquement cote serveur (trigger) depuis la table `zones`.
-   *  Le form n'a pas besoin de les envoyer ; on les enrichit a la volee. */
+   *  Calcules automatiquement cote serveur (trigger) depuis la table `zones`. */
   qTokens?: string[];
-  /** @deprecated S1 — garde pour retro-compat sur les configs existantes.
-   *  Le builder n8n lit `communes[0]` comme code loc si `locCodes` est absent. */
+  /** @deprecated S1 — garde pour retro-compat sur les configs existantes. */
   communes?: string[];
   /** S3 — inclure les programmes neufs en construction.
-   *  false (defaut) => le builder n8n ajoute `old_build=true` et filtre isNewBuild.
-   *  true => aucun filtre neuf, ni cote atHome ni cote scrape. */
+   *  false (defaut) => le builder n8n ajoute `old_build=true` et filtre isNewBuild. */
   includeNew?: boolean;
   surfaceMin?: number;
   surfaceMax?: number;
   priceMin?: number;
   priceMax?: number;
-  /** Classes CPE a conserver, ex: ["F","G","H","I"].
-   *  [] (defaut S3, toggle "Toutes les notes CPE" ON) => aucun filtre CPE,
-   *  et pas de parametre `energy_class` ajoute a l'URL atHome (gain de temps). */
+  /** Classes CPE a conserver. [] (defaut) => aucun filtre CPE ni `energy_class` URL. */
   cpeClasses: string[];
 };
 
@@ -45,7 +40,7 @@ export const DEFAULT_CRITERIA: Criteria = {
 };
 
 // ---------------------------------------------------------------------------
-// Zones (S2) — selection de localisation hierarchique (villes -> quartiers).
+// Zones (S2/S4) — selection de localisation + prix de revente par zone.
 // ---------------------------------------------------------------------------
 
 export type Zone = {
@@ -55,6 +50,10 @@ export type Zone = {
   loc_code: string;
   /** S2.1 — token atHome necessaire pour que loc soit respecte. */
   q_code: string | null;
+  /** S4 — prix de revente cible au m2, calibre dans la page Reglages.
+   *  null sur un quartier => herite du prix de sa ville (parent).
+   *  Porte par la ville (parent) => prix par defaut pour ses quartiers non calibres. */
+  resale_eur_per_m2: number | null;
   sort_order: number;
 };
 
@@ -63,15 +62,14 @@ export type ZoneTree = Zone & {
 };
 
 // ---------------------------------------------------------------------------
-// Stats d'un run (S3) — remontees par n8n dans le POST /api/ingest,
-// persistees dans la colonne runs.stats (JSONB) et affichees sur /runs/[id].
+// Stats d'un run (S3) — persistees dans runs.stats (JSONB), affichees /runs/[id].
 // ---------------------------------------------------------------------------
 
 export type RunStats = {
-  totalAtHome: number;   // search.total cote atHome (apres filtres URL)
-  pagesFetched: number;  // pages SRP reellement scrapees
-  pagesPlanned: number;  // pages prevues (min(ceil(total/20), maxPages))
-  countSold: number;     // biens exclus car deja vendus
-  countNew: number;      // biens exclus car neufs (si includeNew=false)
-  capped: boolean;       // true si le besoin depassait maxPages
+  totalAtHome: number;
+  pagesFetched: number;
+  pagesPlanned: number;
+  countSold: number;
+  countNew: number;
+  capped: boolean;
 };

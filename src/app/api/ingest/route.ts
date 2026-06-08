@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pool, ensureSchema } from "@/lib/db";
 import { scoreListing, type Listing } from "@/lib/scoring";
+import { getZonePriceMap, resolveResalePerM2 } from "@/lib/zones";
 import type { RunStats } from "@/lib/types";
 
 export const runtime = "nodejs";
 
 // n8n POST ici : { runId, secret, listings: Listing[], stats?: RunStats }
-// L'app score avec les parametres de la config liee au run (source unique de verite).
+// L'app score : parametres de la config liee + prix de revente du quartier du bien
+// (resolu depuis la table zones, source unique de verite pour les prix de marche).
 export async function POST(req: NextRequest) {
   await ensureSchema();
   const body = await req.json().catch(() => null);
@@ -44,10 +46,16 @@ export async function POST(req: NextRequest) {
   const scoring = cfg.rows[0]?.scoring;
   if (!scoring) return NextResponse.json({ error: "scoring introuvable" }, { status: 404 });
 
+  // S4 — table de prix par zone (un seul chargement pour tout le run).
+  const priceMap = await getZonePriceMap();
+
   const safe = Array.isArray(listings) ? listings : [];
   const scored = safe
     .filter((l) => l && typeof l.price === "number" && typeof l.surface === "number" && l.surface > 0)
-    .map((l) => scoreListing(l, scoring))
+    .map((l) => {
+      const { resalePerM2, priceIsDefault } = resolveResalePerM2(l.commune, priceMap);
+      return scoreListing(l, scoring, resalePerM2, priceIsDefault);
+    })
     .sort((a, b) => b.marginPct - a.marginPct);
 
   await pool.query(

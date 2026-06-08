@@ -46,7 +46,6 @@ export function ensureSchema(): Promise<void> {
       `);
 
       // S3 — stats du run (totalAtHome, pages, exclusions, capped) remontees par n8n.
-      // Migration idempotente : ajoute la colonne aux installations deja deployees.
       await pool.query(`ALTER TABLE runs ADD COLUMN IF NOT EXISTS stats JSONB;`);
 
       await pool.query(`CREATE INDEX IF NOT EXISTS runs_started_idx ON runs (started_at DESC);`);
@@ -54,10 +53,7 @@ export function ensureSchema(): Promise<void> {
       // -------------------------------------------------------------------
       // Zones (S2) : villes (parent_id NULL, loc_code = code "tout ville")
       // et quartiers (parent_id = id ville, loc_code = code quartier).
-      //
-      // S2.1 : ajout de q_code (token atHome requis pour que `loc=` soit
-      // respecte). Migration idempotente : ADD COLUMN IF NOT EXISTS + UPDATE
-      // depuis les valeurs canoniques.
+      // S2.1 : q_code (token atHome). S4 : resale_eur_per_m2 (prix de revente).
       // -------------------------------------------------------------------
       await pool.query(`
         CREATE TABLE IF NOT EXISTS zones (
@@ -71,8 +67,11 @@ export function ensureSchema(): Promise<void> {
         );
       `);
 
-      // Migration : ajoute la colonne q_code aux installations S2.0 deja deployees.
+      // Migrations idempotentes (installations deja deployees).
       await pool.query(`ALTER TABLE zones ADD COLUMN IF NOT EXISTS q_code TEXT;`);
+      // S4 — prix de revente cible au m2, par zone. NULL sur un quartier = herite
+      // du prix de sa ville (parent). Porte par la ville = prix par defaut.
+      await pool.query(`ALTER TABLE zones ADD COLUMN IF NOT EXISTS resale_eur_per_m2 NUMERIC;`);
 
       const { rows } = await pool.query<{ n: number }>(
         `SELECT COUNT(*)::int AS n FROM zones`
@@ -111,8 +110,7 @@ export function ensureSchema(): Promise<void> {
             ('weimerskirch',   'lux-ville', 'Weimerskirch',               'L10-weimerskirch',           'fa0760ad', 26)
         `);
       } else {
-        // Backfill idempotent : remplit/synchronise q_code pour les
-        // installations S2.0 deja seedees sans cette colonne.
+        // Backfill idempotent du q_code (installations S2.0).
         await pool.query(`
           UPDATE zones SET q_code = src.q FROM (VALUES
             ('lux-ville',      '33e38b1b'),
@@ -147,6 +145,13 @@ export function ensureSchema(): Promise<void> {
             AND (zones.q_code IS NULL OR zones.q_code <> src.q);
         `);
       }
+
+      // S4 — prix de revente par defaut (porte par la ville Luxembourg-Ville).
+      // Pose une seule fois ; ne reecrit jamais une valeur deja calibree.
+      await pool.query(
+        `UPDATE zones SET resale_eur_per_m2 = 11000
+         WHERE id = 'lux-ville' AND resale_eur_per_m2 IS NULL;`
+      );
     })();
   }
   return global._bbinvestSchema;

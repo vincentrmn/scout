@@ -1,13 +1,15 @@
 // Moteur de scoring achat-revente. 100% deterministe, aucune dependance.
-// Tous les parametres viennent de la "scoring config" stockee avec la recherche,
-// pour que tu puisses les calibrer sans toucher au code.
+// S4 : le prix de revente au m2 ne fait plus partie des parametres de la config.
+// C'est une donnee de marche, calibree par zone (page Reglages) et resolue cote
+// /api/ingest selon le quartier du bien, puis injectee ici via `resalePerM2`.
+// La marge reste BRUTE (avant impot) — pas d'IS dans le modele BBI.
 
 export type ScoringParams = {
-  resaleEurPerM2: number;   // prix de revente cible au m2 (apres travaux), a calibrer par zone
-  worksEurPerM2: number;    // cout de renovation estime au m2
-  notaryPct: number;        // frais d'acquisition (notaire + enregistrement), ex: 0.07
+  worksEurPerM2: number;    // cout de renovation estime au m2 (HT)
+  worksVatPct: number;      // S4 — TVA travaux NON recuperable, ex: 0.17
+  notaryPct: number;        // frais d'acquisition (droits + notaire), ex: 0.08
   resaleAgencyPct: number;  // frais a la revente (agence + divers), ex: 0.03
-  targetMarginPct: number;  // marge nette cible sur capital investi, ex: 0.20
+  targetMarginPct: number;  // marge brute cible sur capital investi, ex: 0.15
 };
 
 export type Listing = {
@@ -16,26 +18,38 @@ export type Listing = {
   title?: string;
   price: number;       // prix affiche
   surface: number;     // m2
-  commune?: string;
+  commune?: string;    // ex: "Luxembourg-Limpertsberg" — sert a resoudre le quartier
   cpe?: string;        // classe energetique (A..I)
   rooms?: number;
 };
 
 export type Scored = Listing & {
+  resalePerM2: number;      // S4 — prix de revente au m2 reellement applique
+  priceIsDefault: boolean;  // S4 — true si prix issu du defaut (quartier non calibre)
   resaleValue: number;
-  worksCost: number;
+  worksCost: number;        // TTC (TVA incluse)
   acquisitionCost: number;
   resaleCost: number;
   totalInvested: number;
-  netProfit: number;
-  marginPct: number;        // marge nette / capital investi
+  netProfit: number;        // benefice brut
+  marginPct: number;        // marge brute / capital investi (en %, 1 decimale)
   maxBuyPrice: number;      // prix d'achat max pour atteindre la marge cible
   verdict: "GO" | "NEGOCIER" | "PASS";
 };
 
-export function scoreListing(l: Listing, p: ScoringParams): Scored {
-  const resaleValue = l.surface * p.resaleEurPerM2;
-  const worksCost = l.surface * p.worksEurPerM2;
+/**
+ * Score un bien.
+ * @param resalePerM2   prix de revente au m2 resolu pour le quartier du bien
+ * @param priceIsDefault true si ce prix vient du defaut (quartier non calibre)
+ */
+export function scoreListing(
+  l: Listing,
+  p: ScoringParams,
+  resalePerM2: number,
+  priceIsDefault: boolean
+): Scored {
+  const resaleValue = l.surface * resalePerM2;
+  const worksCost = l.surface * p.worksEurPerM2 * (1 + p.worksVatPct);
   const acquisitionCost = l.price * p.notaryPct;
   const resaleCost = resaleValue * p.resaleAgencyPct;
 
@@ -45,8 +59,8 @@ export function scoreListing(l: Listing, p: ScoringParams): Scored {
   const marginPct = totalInvested > 0 ? netProfit / totalInvested : 0;
 
   // Prix d'achat max pour atteindre exactement la marge cible :
-  // on veut netProfit = target * totalInvested, soit resaleNet = totalInvested*(1+target)
-  // totalInvested = x*(1+notary) + works  =>  x = (resaleNet/(1+target) - works) / (1+notary)
+  // resaleNet = totalInvested*(1+target) ; totalInvested = x*(1+notary) + works
+  // => x = (resaleNet/(1+target) - works) / (1+notary)
   const investedTarget = resaleNet / (1 + p.targetMarginPct);
   const maxBuyPrice = (investedTarget - worksCost) / (1 + p.notaryPct);
 
@@ -58,22 +72,24 @@ export function scoreListing(l: Listing, p: ScoringParams): Scored {
   const round = (n: number) => Math.round(n);
   return {
     ...l,
+    resalePerM2: round(resalePerM2),
+    priceIsDefault,
     resaleValue: round(resaleValue),
     worksCost: round(worksCost),
     acquisitionCost: round(acquisitionCost),
     resaleCost: round(resaleCost),
     totalInvested: round(totalInvested),
     netProfit: round(netProfit),
-    marginPct: Math.round(marginPct * 1000) / 10, // en %, 1 decimale
+    marginPct: Math.round(marginPct * 1000) / 10,
     maxBuyPrice: round(maxBuyPrice),
     verdict,
   };
 }
 
 export const DEFAULT_SCORING: ScoringParams = {
-  resaleEurPerM2: 11000, // a calibrer : Lux-ville ancien renove, ordre de grandeur
   worksEurPerM2: 1500,
-  notaryPct: 0.07,
+  worksVatPct: 0.17,
+  notaryPct: 0.08,
   resaleAgencyPct: 0.03,
-  targetMarginPct: 0.2,
+  targetMarginPct: 0.15,
 };
