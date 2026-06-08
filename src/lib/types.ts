@@ -13,12 +13,18 @@ export type Criteria = {
   /** @deprecated S1 — garde pour retro-compat sur les configs existantes.
    *  Le builder n8n lit `communes[0]` comme code loc si `locCodes` est absent. */
   communes?: string[];
+  /** S3 — inclure les programmes neufs en construction.
+   *  false (defaut) => le builder n8n ajoute `old_build=true` et filtre isNewBuild.
+   *  true => aucun filtre neuf, ni cote atHome ni cote scrape. */
+  includeNew?: boolean;
   surfaceMin?: number;
   surfaceMax?: number;
   priceMin?: number;
   priceMax?: number;
-  cpeClasses: string[];      // classes a conserver, ex: ["F","G","H","I"]
-  keywords: string[];        // mots-cles "travaux", ex: ["a renover","travaux"]
+  /** Classes CPE a conserver, ex: ["F","G","H","I"].
+   *  [] (defaut S3, toggle "Toutes les notes CPE" ON) => aucun filtre CPE,
+   *  et pas de parametre `energy_class` ajoute a l'URL atHome (gain de temps). */
+  cpeClasses: string[];
 };
 
 export type ConfigRow = {
@@ -33,9 +39,9 @@ export type ConfigRow = {
 export const DEFAULT_CRITERIA: Criteria = {
   propertyType: "apartment",
   locCodes: ["L9-luxembourg"],
+  includeNew: false,
   surfaceMax: 50,
-  cpeClasses: ["F", "G", "H", "I"],
-  keywords: ["a renover", "travaux", "rafraichir"],
+  cpeClasses: [],
 };
 
 // ---------------------------------------------------------------------------
@@ -54,4 +60,18 @@ export type Zone = {
 
 export type ZoneTree = Zone & {
   quartiers: Zone[];
+};
+
+// ---------------------------------------------------------------------------
+// Stats d'un run (S3) — remontees par n8n dans le POST /api/ingest,
+// persistees dans la colonne runs.stats (JSONB) et affichees sur /runs/[id].
+// ---------------------------------------------------------------------------
+
+export type RunStats = {
+  totalAtHome: number;   // search.total cote atHome (apres filtres URL)
+  pagesFetched: number;  // pages SRP reellement scrapees
+  pagesPlanned: number;  // pages prevues (min(ceil(total/20), maxPages))
+  countSold: number;     // biens exclus car deja vendus
+  countNew: number;      // biens exclus car neufs (si includeNew=false)
+  capped: boolean;       // true si le besoin depassait maxPages
 };
