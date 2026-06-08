@@ -1,10 +1,12 @@
 "use client";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 
 type Scored = {
   id: string; url: string; title?: string; price: number; surface: number;
-  commune?: string; cpe?: string; resaleValue: number; totalInvested: number;
-  netProfit: number; marginPct: number; maxBuyPrice: number;
+  commune?: string; cpe?: string;
+  resalePerM2: number; priceIsDefault: boolean;
+  resaleValue: number; worksCost: number; acquisitionCost: number; resaleCost: number;
+  totalInvested: number; netProfit: number; marginPct: number; maxBuyPrice: number;
   verdict: "GO" | "NEGOCIER" | "PASS";
 };
 type RunStats = {
@@ -19,8 +21,21 @@ type Run = {
 const eur = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n)) + " €";
 const plur = (n: number) => (n > 1 ? "s" : "");
 
+function DetailRow({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "5px 0", borderBottom: "1px solid var(--line)" }}>
+      <span className="muted" style={{ fontSize: "0.82rem" }}>
+        {label}
+        {hint && <span style={{ fontStyle: "italic", marginLeft: 6 }}>{hint}</span>}
+      </span>
+      <span className="mono" style={{ fontSize: "0.85rem" }}>{value}</span>
+    </div>
+  );
+}
+
 export default function RunPage({ params }: { params: { id: string } }) {
   const [run, setRun] = useState<Run | null>(null);
+  const [open, setOpen] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     let stop = false;
@@ -35,6 +50,7 @@ export default function RunPage({ params }: { params: { id: string } }) {
   }, [params.id]);
 
   const stats = run?.stats;
+  const toggle = (id: string) => setOpen((p) => ({ ...p, [id]: !p[id] }));
 
   return (
     <div className="wrap">
@@ -87,6 +103,7 @@ export default function RunPage({ params }: { params: { id: string } }) {
               <table>
                 <thead>
                   <tr>
+                    <th style={{ width: 28 }}></th>
                     <th>Bien</th>
                     <th className="num">Prix</th>
                     <th className="num">m²</th>
@@ -98,21 +115,61 @@ export default function RunPage({ params }: { params: { id: string } }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {run.results.map((r) => (
-                    <tr key={r.id}>
-                      <td>
-                        <a href={r.url} target="_blank" rel="noreferrer">{r.title || r.id}</a>
-                        {r.commune && <div className="muted" style={{ fontSize: "0.78rem" }}>{r.commune}</div>}
-                      </td>
-                      <td className="num">{eur(r.price)}</td>
-                      <td className="num">{r.surface}</td>
-                      <td><span className="badge">{r.cpe || "—"}</span></td>
-                      <td className="num">{eur(r.resaleValue)}</td>
-                      <td className="num">{r.marginPct}%</td>
-                      <td className="num">{eur(r.maxBuyPrice)}</td>
-                      <td><span className={`verdict ${r.verdict}`}>{r.verdict}</span></td>
-                    </tr>
-                  ))}
+                  {run.results.map((r) => {
+                    const isOpen = !!open[r.id];
+                    return (
+                      <Fragment key={r.id}>
+                        <tr>
+                          <td style={{ textAlign: "center" }}>
+                            <span
+                              role="button"
+                              aria-label={isOpen ? "Replier" : "Détail"}
+                              onClick={() => toggle(r.id)}
+                              style={{ cursor: "pointer", userSelect: "none", color: "var(--ink-soft)", display: "inline-block", transform: isOpen ? "rotate(90deg)" : "none", transition: "transform 0.12s ease" }}
+                            >
+                              ▸
+                            </span>
+                          </td>
+                          <td>
+                            <a href={r.url} target="_blank" rel="noreferrer">{r.title || r.id}</a>
+                            {r.commune && <div className="muted" style={{ fontSize: "0.78rem" }}>{r.commune}</div>}
+                          </td>
+                          <td className="num">{eur(r.price)}</td>
+                          <td className="num">{r.surface}</td>
+                          <td><span className="badge">{r.cpe || "—"}</span></td>
+                          <td className="num">{eur(r.resaleValue)}</td>
+                          <td className="num">{r.marginPct}%</td>
+                          <td className="num">{eur(r.maxBuyPrice)}</td>
+                          <td><span className={`verdict ${r.verdict}`}>{r.verdict}</span></td>
+                        </tr>
+                        {isOpen && (
+                          <tr>
+                            <td colSpan={9} style={{ background: "var(--paper-2)", padding: "12px 16px" }}>
+                              <div className="grid cols-2" style={{ gap: "2px 32px" }}>
+                                <div>
+                                  <DetailRow label="Prix affiché" value={eur(r.price)} />
+                                  <DetailRow
+                                    label="Revente estimée"
+                                    value={eur(r.resaleValue)}
+                                    hint={r.resalePerM2 != null ? `${new Intl.NumberFormat("fr-FR").format(r.resalePerM2)} €/m² ${r.priceIsDefault ? "(défaut)" : "(zone)"}` : undefined}
+                                  />
+                                  <DetailRow label="Travaux TTC" value={eur(r.worksCost)} />
+                                  <DetailRow label="Frais acquisition" value={eur(r.acquisitionCost)} />
+                                  <DetailRow label="Frais revente" value={eur(r.resaleCost)} />
+                                </div>
+                                <div>
+                                  <DetailRow label="Capital investi" value={eur(r.totalInvested)} />
+                                  <DetailRow label="Bénéfice brut" value={eur(r.netProfit)} />
+                                  <DetailRow label="Marge brute" value={`${r.marginPct} %`} />
+                                  <DetailRow label="Prix d'achat max (cible)" value={eur(r.maxBuyPrice)} />
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
