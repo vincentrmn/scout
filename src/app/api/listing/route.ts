@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { pool, ensureSchema } from "@/lib/db";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 // GET /api/listings?tracked=1
 // Retourne les biens marques comme suivis, tries par date de suivi desc.
