@@ -77,8 +77,7 @@ export default function Dashboard() {
       <div className="topbar">
         <div className="brand">
           <span className="dot" />
-          <h1>BBInvest</h1>
-          <small>atHome · achat-revente</small>
+        
         </div>
         <div className="row" style={{ flex: "0 0 auto", alignItems: "center" }}>
           <a className="btn ghost" href="/settings">⚙ Prix de revente</a>
