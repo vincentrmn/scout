@@ -1,4 +1,4 @@
-// Moteur de scoring achat-revente. 100% deterministe, aucune dependance.
+// Moteur de scoring. 100% deterministe, aucune dependance.
 // S4 : le prix de revente au m2 ne fait plus partie des parametres de la config.
 // C'est une donnee de marche, calibree par zone (page Reglages) et resolue cote
 // /api/ingest selon le quartier du bien, puis injectee ici via `resalePerM2`.
@@ -35,6 +35,9 @@ export type Scored = Listing & {
   marginPct: number;        // marge brute / capital investi (en %, 1 decimale)
   maxBuyPrice: number;      // prix d'achat max pour atteindre la marge cible
   verdict: "GO" | "NEGOCIER" | "PASS";
+  // S5 — variation vs derniere vue : negatif = baisse (signal nego), null = premiere apparition.
+  // Valeur initiale null ; ecrasee par /api/ingest apres lookup DB.
+  priceDelta: number | null;
 };
 
 /**
@@ -83,6 +86,7 @@ export function scoreListing(
     marginPct: Math.round(marginPct * 1000) / 10,
     maxBuyPrice: round(maxBuyPrice),
     verdict,
+    priceDelta: null, // ecrase par /api/ingest
   };
 }
 

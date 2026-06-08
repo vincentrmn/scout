@@ -50,11 +50,68 @@ export async function POST(req: NextRequest) {
   const priceMap = await getZonePriceMap();
 
   const safe = Array.isArray(listings) ? listings : [];
-  const scored = safe
-    .filter((l) => l && typeof l.price === "number" && typeof l.surface === "number" && l.surface > 0)
+  const filtered = safe.filter(
+    (l) => l && typeof l.price === "number" && typeof l.surface === "number" && l.surface > 0
+  );
+
+  // S5 — Recupere les prix actuellement stockes pour detecter les baisses/hausses.
+  // Un seul SELECT batch, puis upserts paralleles.
+  const ids = filtered.map((l) => l.id);
+  const prevRows =
+    ids.length > 0
+      ? (
+          await pool.query<{ id: string; price: number }>(
+            `SELECT id, price FROM listings WHERE id = ANY($1)`,
+            [ids]
+          )
+        ).rows
+      : [];
+  const prevPriceMap = new Map(prevRows.map((r) => [r.id, r.price]));
+
+  // S5 — Upsert de chaque bien : insert si nouveau, sinon MAJ last_seen + prix.
+  // Ne touche JAMAIS tracked / tracked_at / first_seen.
+  await Promise.all(
+    filtered.map((l) =>
+      pool.query(
+        `INSERT INTO listings (id, price, surface, commune, rooms, title, url, cpe)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (id) DO UPDATE SET
+           last_seen  = now(),
+           prev_price = CASE
+             WHEN listings.price <> EXCLUDED.price THEN listings.price
+             ELSE listings.prev_price
+           END,
+           price   = EXCLUDED.price,
+           surface = EXCLUDED.surface,
+           commune = EXCLUDED.commune,
+           rooms   = EXCLUDED.rooms,
+           title   = EXCLUDED.title,
+           url     = EXCLUDED.url,
+           cpe     = EXCLUDED.cpe`,
+        [
+          l.id,
+          l.price,
+          l.surface ?? null,
+          l.commune ?? null,
+          l.rooms ?? null,
+          l.title ?? null,
+          l.url,
+          l.cpe ?? null,
+        ]
+      )
+    )
+  );
+
+  // Score + injection du delta dans chaque bien
+  const scored = filtered
     .map((l) => {
       const { resalePerM2, priceIsDefault } = resolveResalePerM2(l.commune, priceMap);
-      return scoreListing(l, scoring, resalePerM2, priceIsDefault);
+      const base = scoreListing(l, scoring, resalePerM2, priceIsDefault);
+      const prev = prevPriceMap.get(l.id);
+      // priceDelta negatif = baisse de prix (signal de nego), positif = hausse, null = premiere vue
+      const priceDelta =
+        prev !== undefined && prev !== l.price ? l.price - prev : null;
+      return { ...base, priceDelta };
     })
     .sort((a, b) => b.marginPct - a.marginPct);
 

@@ -152,6 +152,32 @@ export function ensureSchema(): Promise<void> {
         `UPDATE zones SET resale_eur_per_m2 = 11000
          WHERE id = 'lux-ville' AND resale_eur_per_m2 IS NULL;`
       );
+
+      // -------------------------------------------------------------------
+      // S5 — Listings : persistance cross-run des biens scrapes.
+      // Cle primaire = id atHome (stable). Ne touche pas tracked/first_seen
+      // lors des upserts ; seul /api/listings/track modifie tracked.
+      // -------------------------------------------------------------------
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS listings (
+          id          TEXT PRIMARY KEY,
+          price       INTEGER,
+          prev_price  INTEGER,
+          surface     NUMERIC,
+          commune     TEXT,
+          rooms       INTEGER,
+          title       TEXT,
+          url         TEXT,
+          cpe         TEXT,
+          first_seen  TIMESTAMPTZ NOT NULL DEFAULT now(),
+          last_seen   TIMESTAMPTZ NOT NULL DEFAULT now(),
+          tracked     BOOLEAN NOT NULL DEFAULT false,
+          tracked_at  TIMESTAMPTZ
+        );
+      `);
+      await pool.query(
+        `CREATE INDEX IF NOT EXISTS listings_tracked_idx ON listings (tracked) WHERE tracked = true;`
+      );
     })();
   }
   return global._bbinvestSchema;

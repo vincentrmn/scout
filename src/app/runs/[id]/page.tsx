@@ -8,6 +8,7 @@ type Scored = {
   resaleValue: number; worksCost: number; acquisitionCost: number; resaleCost: number;
   totalInvested: number; netProfit: number; marginPct: number; maxBuyPrice: number;
   verdict: "GO" | "NEGOCIER" | "PASS";
+  priceDelta?: number | null; // S5
 };
 type RunStats = {
   totalAtHome: number; pagesFetched: number; pagesPlanned: number;
@@ -36,7 +37,9 @@ function DetailRow({ label, value, hint }: { label: string; value: string; hint?
 export default function RunPage({ params }: { params: { id: string } }) {
   const [run, setRun] = useState<Run | null>(null);
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [tracked, setTracked] = useState<Set<string>>(new Set());
 
+  // Polling du run
   useEffect(() => {
     let stop = false;
     async function tick() {
@@ -49,8 +52,33 @@ export default function RunPage({ params }: { params: { id: string } }) {
     return () => { stop = true; };
   }, [params.id]);
 
+  // S5 — Charge les ids deja suivis au montage
+  useEffect(() => {
+    fetch("/api/listings?tracked=1")
+      .then((r) => r.json())
+      .then((rows: { id: string }[]) => {
+        if (Array.isArray(rows)) setTracked(new Set(rows.map((r) => r.id)));
+      })
+      .catch(() => {});
+  }, []);
+
   const stats = run?.stats;
   const toggle = (id: string) => setOpen((p) => ({ ...p, [id]: !p[id] }));
+
+  // S5 — Bascule le suivi d'un bien (optimiste)
+  const toggleTrack = async (id: string) => {
+    const isTracked = tracked.has(id);
+    setTracked((prev) => {
+      const next = new Set(prev);
+      isTracked ? next.delete(id) : next.add(id);
+      return next;
+    });
+    await fetch("/api/listings/track", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, tracked: !isTracked }),
+    });
+  };
 
   return (
     <div className="wrap">
@@ -76,7 +104,7 @@ export default function RunPage({ params }: { params: { id: string } }) {
           {stats && (
             <div className="card" style={{ marginBottom: 16 }}>
               <div style={{ fontSize: "0.9rem" }}>
-                <strong>{stats.totalAtHome}</strong> bien{plur(stats.totalAtHome)} trouvé{plur(stats.totalAtHome)} sur atHome ·{" "}
+                <strong>{stats.totalAtHome}</strong> bien{plur(stats.totalAtHome)} trouvé{plur(stats.totalAtHome)} ·{" "}
                 <strong>{stats.pagesFetched}</strong> page{plur(stats.pagesFetched)} scrapée{plur(stats.pagesFetched)}
                 {stats.pagesPlanned > stats.pagesFetched ? ` sur ${stats.pagesPlanned} prévues` : ""} ·{" "}
                 après filtres : <strong>{run.count}</strong> bien{plur(run.count)} analysé{plur(run.count)}.
@@ -112,11 +140,13 @@ export default function RunPage({ params }: { params: { id: string } }) {
                     <th className="num">Marge</th>
                     <th className="num">Achat max</th>
                     <th>Verdict</th>
+                    <th style={{ width: 36 }}></th>
                   </tr>
                 </thead>
                 <tbody>
                   {run.results.map((r) => {
                     const isOpen = !!open[r.id];
+                    const isTracked = tracked.has(r.id);
                     return (
                       <Fragment key={r.id}>
                         <tr>
@@ -134,17 +164,33 @@ export default function RunPage({ params }: { params: { id: string } }) {
                             <a href={r.url} target="_blank" rel="noreferrer">{r.title || r.id}</a>
                             {r.commune && <div className="muted" style={{ fontSize: "0.78rem" }}>{r.commune}</div>}
                           </td>
-                          <td className="num">{eur(r.price)}</td>
+                          <td className="num">
+                            {eur(r.price)}
+                            {r.priceDelta != null && (
+                              <span className={`delta-badge ${r.priceDelta < 0 ? "down" : "up"}`}>
+                                {r.priceDelta < 0 ? "↓" : "↑"} {eur(Math.abs(r.priceDelta))}
+                              </span>
+                            )}
+                          </td>
                           <td className="num">{r.surface}</td>
                           <td><span className="badge">{r.cpe || "—"}</span></td>
                           <td className="num">{eur(r.resaleValue)}</td>
                           <td className="num">{r.marginPct}%</td>
                           <td className="num">{eur(r.maxBuyPrice)}</td>
                           <td><span className={`verdict ${r.verdict}`}>{r.verdict}</span></td>
+                          <td style={{ textAlign: "center" }}>
+                            <button
+                              className={`star-btn ${isTracked ? "tracked" : ""}`}
+                              onClick={() => toggleTrack(r.id)}
+                              title={isTracked ? "Retirer des suivis" : "Suivre ce bien"}
+                            >
+                              {isTracked ? "★" : "☆"}
+                            </button>
+                          </td>
                         </tr>
                         {isOpen && (
                           <tr>
-                            <td colSpan={9} style={{ background: "var(--paper-2)", padding: "12px 16px" }}>
+                            <td colSpan={10} style={{ background: "var(--paper-2)", padding: "12px 16px" }}>
                               <div className="grid cols-2" style={{ gap: "2px 32px" }}>
                                 <div>
                                   <DetailRow label="Prix affiché" value={eur(r.price)} />
