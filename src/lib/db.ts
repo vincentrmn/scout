@@ -44,6 +44,11 @@ export function ensureSchema(): Promise<void> {
           finished_at TIMESTAMPTZ
         );
       `);
+
+      // S3 — stats du run (totalAtHome, pages, exclusions, capped) remontees par n8n.
+      // Migration idempotente : ajoute la colonne aux installations deja deployees.
+      await pool.query(`ALTER TABLE runs ADD COLUMN IF NOT EXISTS stats JSONB;`);
+
       await pool.query(`CREATE INDEX IF NOT EXISTS runs_started_idx ON runs (started_at DESC);`);
 
       // -------------------------------------------------------------------
