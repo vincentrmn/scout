@@ -7,29 +7,17 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // GET /api/listings?tracked=1
-// Retourne les biens suivis, enrichis d'un re-scoring "a la volee" :
-// DEFAULT_SCORING + prix de revente de la zone du bien (table zones).
-// Pas de verdict — uniquement la marge brute calculee + le detail financier.
-// force-dynamic : empeche Next.js 14 de prerendre cette route au build
-// (reseau Railway prive indisponible a ce moment-la).
+// Biens suivis, enrichis : re-scoring a la volee (DEFAULT_SCORING + prix zone,
+// sans verdict) + historique de prix (S6 Phase 1).
 export async function GET() {
   try {
     await ensureSchema();
     const { rows } = await pool.query(`
       SELECT
-        id,
-        price,
-        prev_price,
-        surface::float  AS surface,
-        commune,
-        rooms,
-        title,
-        url,
-        cpe,
-        first_seen,
-        last_seen,
-        tracked,
-        tracked_at,
+        id, price, prev_price,
+        surface::float AS surface,
+        commune, rooms, title, url, cpe,
+        first_seen, last_seen, tracked, tracked_at,
         CASE
           WHEN prev_price IS NOT NULL AND prev_price <> price
           THEN price - prev_price
@@ -40,12 +28,34 @@ export async function GET() {
       ORDER BY tracked_at DESC NULLS LAST
     `);
 
-    // Re-scoring config-independant : config de reference = DEFAULT_SCORING,
-    // prix de revente resolu par zone (un seul chargement pour tous les biens).
+    const ids = rows.map((r) => r.id);
+
+    // S6 Phase 1 — historique de prix de chaque bien suivi (un seul SELECT).
+    const histMap = new Map<string, { price: number; seen_at: string }[]>();
+    if (ids.length > 0) {
+      const { rows: snaps } = await pool.query<{
+        listing_id: string;
+        price: number;
+        seen_at: string;
+      }>(
+        `SELECT listing_id, price, seen_at
+         FROM listing_snapshots
+         WHERE listing_id = ANY($1)
+         ORDER BY seen_at ASC`,
+        [ids]
+      );
+      for (const s of snaps) {
+        if (!histMap.has(s.listing_id)) histMap.set(s.listing_id, []);
+        histMap.get(s.listing_id)!.push({ price: s.price, seen_at: s.seen_at });
+      }
+    }
+
+    // Re-scoring config-independant : DEFAULT_SCORING + prix de revente par zone.
     const priceMap = await getZonePriceMap();
     const enriched = rows.map((row) => {
+      const history = histMap.get(row.id) ?? [];
       if (!row.surface || row.surface <= 0) {
-        return { ...row, marginPct: null };
+        return { ...row, marginPct: null, history };
       }
       const { resalePerM2, priceIsDefault } = resolveResalePerM2(row.commune, priceMap);
       const s = scoreListing(
@@ -75,6 +85,7 @@ export async function GET() {
         netProfit: s.netProfit,
         marginPct: s.marginPct,
         maxBuyPrice: s.maxBuyPrice,
+        history,
       };
     });
 

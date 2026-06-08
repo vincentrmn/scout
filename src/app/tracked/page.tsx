@@ -1,6 +1,8 @@
 "use client";
 import { Fragment, useEffect, useState } from "react";
 
+type Snapshot = { price: number; seen_at: string };
+
 type TrackedListing = {
   id: string;
   url: string;
@@ -25,6 +27,8 @@ type TrackedListing = {
   netProfit?: number;
   marginPct?: number | null;
   maxBuyPrice?: number;
+  // S6 Phase 1
+  history?: Snapshot[];
 };
 
 const eur = (n: number) =>
@@ -42,6 +46,35 @@ function DetailRow({ label, value, hint }: { label: string; value: string; hint?
       </span>
       <span className="mono" style={{ fontSize: "0.85rem" }}>{value}</span>
     </div>
+  );
+}
+
+// Sparkline minimale, sans dependance. Vert BBI. Rien si < 2 points.
+function Sparkline({ points }: { points: number[] }) {
+  if (points.length < 2) return null;
+  const w = 240, h = 44, pad = 4;
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const range = max - min || 1;
+  const step = (w - pad * 2) / (points.length - 1);
+  const coords = points
+    .map((p, i) => {
+      const x = pad + i * step;
+      const y = pad + (h - pad * 2) * (1 - (p - min) / range);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ display: "block" }}>
+      <polyline
+        points={coords}
+        fill="none"
+        stroke="var(--green)"
+        strokeWidth="2"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }
 
@@ -89,31 +122,21 @@ export default function TrackedPage() {
         <a className="btn ghost" href="/">← Retour</a>
       </div>
 
-      {/* Chargement */}
-      {listings === null && error === null && (
-        <p className="empty">Chargement…</p>
-      )}
+      {listings === null && error === null && <p className="empty">Chargement…</p>}
 
-      {/* Erreur */}
       {error !== null && (
         <div className="card">
-          <p className="error" style={{ margin: 0 }}>
-            Erreur : {error}
-          </p>
-          <button className="btn ghost" onClick={load} style={{ marginTop: 12 }}>
-            Réessayer
-          </button>
+          <p className="error" style={{ margin: 0 }}>Erreur : {error}</p>
+          <button className="btn ghost" onClick={load} style={{ marginTop: 12 }}>Réessayer</button>
         </div>
       )}
 
-      {/* Vide */}
       {listings !== null && listings.length === 0 && (
         <p className="empty">
           Aucun bien suivi pour l'instant. Étoilez des biens depuis une page de résultats.
         </p>
       )}
 
-      {/* Liste */}
       {listings !== null && listings.length > 0 && (
         <>
           <p className="muted" style={{ fontSize: "0.82rem", marginBottom: 14 }}>
@@ -139,6 +162,7 @@ export default function TrackedPage() {
                   const stale = age > 30;
                   const isOpen = !!open[l.id];
                   const hasScore = l.marginPct != null && l.resaleValue != null;
+                  const history = l.history ?? [];
                   return (
                     <Fragment key={l.id}>
                       <tr>
@@ -155,13 +179,9 @@ export default function TrackedPage() {
                           )}
                         </td>
                         <td>
-                          <a href={l.url} target="_blank" rel="noreferrer">
-                            {l.title || l.id}
-                          </a>
+                          <a href={l.url} target="_blank" rel="noreferrer">{l.title || l.id}</a>
                           {l.commune && (
-                            <div className="muted" style={{ fontSize: "0.78rem" }}>
-                              {l.commune}
-                            </div>
+                            <div className="muted" style={{ fontSize: "0.78rem" }}>{l.commune}</div>
                           )}
                         </td>
                         <td className="num">
@@ -180,19 +200,11 @@ export default function TrackedPage() {
                             {age === 0 ? "Aujourd'hui" : age === 1 ? "Hier" : `Il y a ${age}j`}
                           </span>
                           {stale && (
-                            <span className="badge" style={{ marginLeft: 8, fontSize: "0.68rem" }}>
-                              inactif ?
-                            </span>
+                            <span className="badge" style={{ marginLeft: 8, fontSize: "0.68rem" }}>inactif ?</span>
                           )}
                         </td>
                         <td style={{ textAlign: "center" }}>
-                          <button
-                            className="star-btn tracked"
-                            onClick={() => untrack(l.id)}
-                            title="Retirer des suivis"
-                          >
-                            ★
-                          </button>
+                          <button className="star-btn tracked" onClick={() => untrack(l.id)} title="Retirer des suivis">★</button>
                         </td>
                       </tr>
                       {isOpen && hasScore && (
@@ -216,6 +228,41 @@ export default function TrackedPage() {
                                 <DetailRow label="Marge brute" value={`${l.marginPct} %`} />
                                 <DetailRow label="Prix d'achat max (cible)" value={eur(l.maxBuyPrice!)} />
                               </div>
+                            </div>
+
+                            {/* S6 Phase 1 — historique de prix */}
+                            <div style={{ marginTop: 16 }}>
+                              <div className="muted" style={{ fontSize: "0.78rem", marginBottom: 8, fontWeight: 600 }}>
+                                Historique de prix
+                              </div>
+                              {history.length < 2 ? (
+                                <p className="muted" style={{ fontSize: "0.8rem", margin: 0, fontStyle: "italic" }}>
+                                  Une seule observation pour l'instant — l'évolution apparaîtra dès qu'un prix change.
+                                </p>
+                              ) : (
+                                <>
+                                  <Sparkline points={history.map((h) => h.price)} />
+                                  <div style={{ marginTop: 8, maxWidth: 360 }}>
+                                    {[...history].reverse().map((h, i, arr) => {
+                                      const older = arr[i + 1];
+                                      const d = older ? h.price - older.price : null;
+                                      return (
+                                        <div key={h.seen_at + i} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", padding: "3px 0" }}>
+                                          <span className="muted">{new Date(h.seen_at).toLocaleDateString("fr-FR")}</span>
+                                          <span className="mono">
+                                            {eur(h.price)}
+                                            {d != null && d !== 0 && (
+                                              <span style={{ marginLeft: 6, color: d < 0 ? "var(--green)" : "var(--ink-soft)" }}>
+                                                {d < 0 ? "↓" : "↑"} {eur(Math.abs(d))}
+                                              </span>
+                                            )}
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </>
+                              )}
                             </div>
                           </td>
                         </tr>

@@ -7,8 +7,7 @@ import type { RunStats } from "@/lib/types";
 export const runtime = "nodejs";
 
 // n8n POST ici : { runId, secret, listings: Listing[], stats?: RunStats }
-// L'app score : parametres de la config liee + prix de revente du quartier du bien
-// (resolu depuis la table zones, source unique de verite pour les prix de marche).
+// L'app score : parametres de la config liee + prix de revente du quartier du bien.
 export async function POST(req: NextRequest) {
   await ensureSchema();
   const body = await req.json().catch(() => null);
@@ -54,8 +53,7 @@ export async function POST(req: NextRequest) {
     (l) => l && typeof l.price === "number" && typeof l.surface === "number" && l.surface > 0
   );
 
-  // S5 — Recupere les prix actuellement stockes pour detecter les baisses/hausses.
-  // Un seul SELECT batch, puis upserts paralleles.
+  // S5 — prix actuellement stockes (detection baisse/hausse). 1 SELECT batch.
   const ids = filtered.map((l) => l.id);
   const prevRows =
     ids.length > 0
@@ -68,8 +66,7 @@ export async function POST(req: NextRequest) {
       : [];
   const prevPriceMap = new Map(prevRows.map((r) => [r.id, r.price]));
 
-  // S5 — Upsert de chaque bien : insert si nouveau, sinon MAJ last_seen + prix.
-  // Ne touche JAMAIS tracked / tracked_at / first_seen.
+  // S5 — Upsert (ne touche jamais tracked / tracked_at / first_seen).
   await Promise.all(
     filtered.map((l) =>
       pool.query(
@@ -102,13 +99,28 @@ export async function POST(req: NextRequest) {
     )
   );
 
+  // S6 Phase 1 — Snapshot de prix : uniquement si bien nouveau OU prix change.
+  // S'execute APRES l'upsert (le listing doit exister pour la FK).
+  await Promise.all(
+    filtered
+      .filter((l) => {
+        const prev = prevPriceMap.get(l.id);
+        return prev === undefined || prev !== l.price;
+      })
+      .map((l) =>
+        pool.query(
+          `INSERT INTO listing_snapshots (listing_id, price) VALUES ($1, $2)`,
+          [l.id, l.price]
+        )
+      )
+  );
+
   // Score + injection du delta dans chaque bien
   const scored = filtered
     .map((l) => {
       const { resalePerM2, priceIsDefault } = resolveResalePerM2(l.commune, priceMap);
       const base = scoreListing(l, scoring, resalePerM2, priceIsDefault);
       const prev = prevPriceMap.get(l.id);
-      // priceDelta negatif = baisse de prix (signal de nego), positif = hausse, null = premiere vue
       const priceDelta =
         prev !== undefined && prev !== l.price ? l.price - prev : null;
       return { ...base, priceDelta };

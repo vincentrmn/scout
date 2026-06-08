@@ -69,8 +69,7 @@ export function ensureSchema(): Promise<void> {
 
       // Migrations idempotentes (installations deja deployees).
       await pool.query(`ALTER TABLE zones ADD COLUMN IF NOT EXISTS q_code TEXT;`);
-      // S4 — prix de revente cible au m2, par zone. NULL sur un quartier = herite
-      // du prix de sa ville (parent). Porte par la ville = prix par defaut.
+      // S4 — prix de revente cible au m2, par zone.
       await pool.query(`ALTER TABLE zones ADD COLUMN IF NOT EXISTS resale_eur_per_m2 NUMERIC;`);
 
       const { rows } = await pool.query<{ n: number }>(
@@ -147,7 +146,6 @@ export function ensureSchema(): Promise<void> {
       }
 
       // S4 — prix de revente par defaut (porte par la ville Luxembourg-Ville).
-      // Pose une seule fois ; ne reecrit jamais une valeur deja calibree.
       await pool.query(
         `UPDATE zones SET resale_eur_per_m2 = 11000
          WHERE id = 'lux-ville' AND resale_eur_per_m2 IS NULL;`
@@ -155,8 +153,6 @@ export function ensureSchema(): Promise<void> {
 
       // -------------------------------------------------------------------
       // S5 — Listings : persistance cross-run des biens scrapes.
-      // Cle primaire = id atHome (stable). Ne touche pas tracked/first_seen
-      // lors des upserts ; seul /api/listings/track modifie tracked.
       // -------------------------------------------------------------------
       await pool.query(`
         CREATE TABLE IF NOT EXISTS listings (
@@ -177,6 +173,23 @@ export function ensureSchema(): Promise<void> {
       `);
       await pool.query(
         `CREATE INDEX IF NOT EXISTS listings_tracked_idx ON listings (tracked) WHERE tracked = true;`
+      );
+
+      // -------------------------------------------------------------------
+      // S6 Phase 1 — Historique de prix. Un snapshot par changement de prix
+      // (ou a la premiere apparition). Permet de tracer l'evolution dans Suivis.
+      // -------------------------------------------------------------------
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS listing_snapshots (
+          id          SERIAL PRIMARY KEY,
+          listing_id  TEXT NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
+          price       INTEGER NOT NULL,
+          seen_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+      `);
+      await pool.query(
+        `CREATE INDEX IF NOT EXISTS listing_snapshots_listing_idx
+         ON listing_snapshots (listing_id, seen_at);`
       );
     })();
   }
