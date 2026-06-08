@@ -65,7 +65,7 @@ export default function RunPage({ params }: { params: { id: string } }) {
       {!run && <p className="empty">Chargement…</p>}
 
       {run?.status === "running" && (
-        <div className="card"><p style={{ margin: 0 }}>⏳ Scraping en cours via n8n… (rafraîchissement auto)</p></div>
+        <div className="card"><p style={{ margin: 0 }}>⏳ Scraping en cours… (rafraîchissement auto)</p></div>
       )}
       {run?.status === "error" && (
         <div className="card"><p className="error" style={{ margin: 0 }}>Erreur : {run.error}</p></div>
