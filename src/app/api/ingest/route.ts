@@ -6,8 +6,6 @@ import type { RunStats } from "@/lib/types";
 
 export const runtime = "nodejs";
 
-// n8n POST ici : { runId, secret, listings: Listing[], stats?: RunStats }
-// L'app score : parametres de la config liee + prix de revente du quartier du bien.
 export async function POST(req: NextRequest) {
   await ensureSchema();
   const body = await req.json().catch(() => null);
@@ -36,16 +34,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  // Recupere les parametres de scoring de la config liee
-  const runRow = await pool.query(`SELECT config_id FROM runs WHERE id=$1`, [runId]);
+  // Run lie : scoring de la config + flags (is_watch alimente les Nouveautes).
+  const runRow = await pool.query<{ config_id: number; config_name: string; is_watch: boolean }>(
+    `SELECT config_id, config_name, is_watch FROM runs WHERE id=$1`,
+    [runId]
+  );
   if (!runRow.rows.length) return NextResponse.json({ error: "run introuvable" }, { status: 404 });
-  const cfg = await pool.query(`SELECT scoring FROM configs WHERE id=$1`, [
-    runRow.rows[0].config_id,
-  ]);
+  const { config_id, config_name, is_watch } = runRow.rows[0];
+
+  const cfg = await pool.query(`SELECT scoring FROM configs WHERE id=$1`, [config_id]);
   const scoring = cfg.rows[0]?.scoring;
   if (!scoring) return NextResponse.json({ error: "scoring introuvable" }, { status: 404 });
 
-  // S4 — table de prix par zone (un seul chargement pour tout le run).
   const priceMap = await getZonePriceMap();
 
   const safe = Array.isArray(listings) ? listings : [];
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     (l) => l && typeof l.price === "number" && typeof l.surface === "number" && l.surface > 0
   );
 
-  // S5 — prix actuellement stockes (detection baisse/hausse). 1 SELECT batch.
+  // S5 — prix actuellement stockes (detection baisse/hausse + nouveaute). 1 SELECT batch.
   const ids = filtered.map((l) => l.id);
   const prevRows =
     ids.length > 0
@@ -85,22 +85,12 @@ export async function POST(req: NextRequest) {
            title   = EXCLUDED.title,
            url     = EXCLUDED.url,
            cpe     = EXCLUDED.cpe`,
-        [
-          l.id,
-          l.price,
-          l.surface ?? null,
-          l.commune ?? null,
-          l.rooms ?? null,
-          l.title ?? null,
-          l.url,
-          l.cpe ?? null,
-        ]
+        [l.id, l.price, l.surface ?? null, l.commune ?? null, l.rooms ?? null, l.title ?? null, l.url, l.cpe ?? null]
       )
     )
   );
 
-  // S6 Phase 1 — Snapshot de prix : uniquement si bien nouveau OU prix change.
-  // S'execute APRES l'upsert (le listing doit exister pour la FK).
+  // S6 Phase 1 — Snapshot de prix : si bien nouveau OU prix change.
   await Promise.all(
     filtered
       .filter((l) => {
@@ -108,21 +98,17 @@ export async function POST(req: NextRequest) {
         return prev === undefined || prev !== l.price;
       })
       .map((l) =>
-        pool.query(
-          `INSERT INTO listing_snapshots (listing_id, price) VALUES ($1, $2)`,
-          [l.id, l.price]
-        )
+        pool.query(`INSERT INTO listing_snapshots (listing_id, price) VALUES ($1, $2)`, [l.id, l.price])
       )
   );
 
-  // Score + injection du delta dans chaque bien
+  // Score + delta
   const scored = filtered
     .map((l) => {
       const { resalePerM2, priceIsDefault } = resolveResalePerM2(l.commune, priceMap);
       const base = scoreListing(l, scoring, resalePerM2, priceIsDefault);
       const prev = prevPriceMap.get(l.id);
-      const priceDelta =
-        prev !== undefined && prev !== l.price ? l.price - prev : null;
+      const priceDelta = prev !== undefined && prev !== l.price ? l.price - prev : null;
       return { ...base, priceDelta };
     })
     .sort((a, b) => b.marginPct - a.marginPct);
@@ -131,6 +117,24 @@ export async function POST(req: NextRequest) {
     `UPDATE runs SET status='done', count=$2, results=$3, stats=$4, finished_at=now() WHERE id=$1`,
     [runId, scored.length, JSON.stringify(scored), statsJson]
   );
+
+  // S6 Phase 3 — Nouveautes : sur un run de veille, capture les biens VUS POUR
+  // LA 1ere FOIS et classes GO/NEGOCIER. PK listing_id => dedup (1 entree/bien).
+  if (is_watch) {
+    const fresh = scored.filter(
+      (s) => !prevPriceMap.has(s.id) && (s.verdict === "GO" || s.verdict === "NEGOCIER")
+    );
+    await Promise.all(
+      fresh.map((s) =>
+        pool.query(
+          `INSERT INTO findings (listing_id, run_id, config_name, verdict, margin_pct, price)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (listing_id) DO NOTHING`,
+          [s.id, runId, config_name, s.verdict, s.marginPct, s.price]
+        )
+      )
+    );
+  }
 
   return NextResponse.json({ ok: true, scored: scored.length });
 }

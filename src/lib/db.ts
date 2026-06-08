@@ -30,7 +30,7 @@ export function ensureSchema(): Promise<void> {
           updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
         );
       `);
-      // S6 Phase 2 — veille : la config tourne-t-elle automatiquement chaque matin ?
+      // S6 Phase 2 — veille auto chaque matin.
       await pool.query(
         `ALTER TABLE configs ADD COLUMN IF NOT EXISTS watch_enabled BOOLEAN NOT NULL DEFAULT false;`
       );
@@ -48,17 +48,12 @@ export function ensureSchema(): Promise<void> {
           finished_at TIMESTAMPTZ
         );
       `);
-
-      // S3 — stats du run (totalAtHome, pages, exclusions, capped) remontees par n8n.
       await pool.query(`ALTER TABLE runs ADD COLUMN IF NOT EXISTS stats JSONB;`);
       // S6 Phase 2 — run issu de la veille planifiee (=> source des Nouveautes).
       await pool.query(`ALTER TABLE runs ADD COLUMN IF NOT EXISTS is_watch BOOLEAN NOT NULL DEFAULT false;`);
-
       await pool.query(`CREATE INDEX IF NOT EXISTS runs_started_idx ON runs (started_at DESC);`);
 
-      // -------------------------------------------------------------------
       // Zones (S2/S4)
-      // -------------------------------------------------------------------
       await pool.query(`
         CREATE TABLE IF NOT EXISTS zones (
           id          TEXT        PRIMARY KEY,
@@ -74,7 +69,6 @@ export function ensureSchema(): Promise<void> {
       await pool.query(`ALTER TABLE zones ADD COLUMN IF NOT EXISTS resale_eur_per_m2 NUMERIC;`);
 
       const { rows } = await pool.query<{ n: number }>(`SELECT COUNT(*)::int AS n FROM zones`);
-
       if (rows[0].n === 0) {
         await pool.query(`
           INSERT INTO zones (id, parent_id, label, loc_code, q_code, sort_order) VALUES
@@ -120,14 +114,11 @@ export function ensureSchema(): Promise<void> {
           WHERE zones.id = src.id AND (zones.q_code IS NULL OR zones.q_code <> src.q);
         `);
       }
-
       await pool.query(
         `UPDATE zones SET resale_eur_per_m2 = 11000 WHERE id = 'lux-ville' AND resale_eur_per_m2 IS NULL;`
       );
 
-      // -------------------------------------------------------------------
-      // S5 — Listings (persistance cross-run)
-      // -------------------------------------------------------------------
+      // S5 — Listings
       await pool.query(`
         CREATE TABLE IF NOT EXISTS listings (
           id          TEXT PRIMARY KEY,
@@ -149,9 +140,7 @@ export function ensureSchema(): Promise<void> {
         `CREATE INDEX IF NOT EXISTS listings_tracked_idx ON listings (tracked) WHERE tracked = true;`
       );
 
-      // -------------------------------------------------------------------
       // S6 Phase 1 — Historique de prix
-      // -------------------------------------------------------------------
       await pool.query(`
         CREATE TABLE IF NOT EXISTS listing_snapshots (
           id          SERIAL PRIMARY KEY,
@@ -163,6 +152,23 @@ export function ensureSchema(): Promise<void> {
       await pool.query(
         `CREATE INDEX IF NOT EXISTS listing_snapshots_listing_idx ON listing_snapshots (listing_id, seen_at);`
       );
+
+      // -------------------------------------------------------------------
+      // S6 Phase 3 — Nouveautes : opportunites (GO/NEGOCIER) decouvertes pour
+      // la 1ere fois lors d'une veille. listing_id en PK => une entree par bien.
+      // -------------------------------------------------------------------
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS findings (
+          listing_id  TEXT PRIMARY KEY REFERENCES listings(id) ON DELETE CASCADE,
+          run_id      INTEGER REFERENCES runs(id) ON DELETE SET NULL,
+          config_name TEXT,
+          verdict     TEXT,
+          margin_pct  NUMERIC,
+          price       INTEGER,
+          found_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS findings_found_idx ON findings (found_at DESC);`);
     })();
   }
   return global._bbinvestSchema;
