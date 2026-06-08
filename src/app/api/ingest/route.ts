@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pool, ensureSchema } from "@/lib/db";
 import { scoreListing, type Listing } from "@/lib/scoring";
+import type { RunStats } from "@/lib/types";
 
 export const runtime = "nodejs";
 
-// n8n POST ici : { runId, secret, listings: Listing[] }
+// n8n POST ici : { runId, secret, listings: Listing[], stats?: RunStats }
 // L'app score avec les parametres de la config liee au run (source unique de verite).
 export async function POST(req: NextRequest) {
   await ensureSchema();
@@ -16,18 +17,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "secret invalide" }, { status: 401 });
   }
 
-  const { runId, listings, error } = body as {
+  const { runId, listings, stats, error } = body as {
     runId: number;
     listings?: Listing[];
+    stats?: RunStats;
     error?: string;
   };
   if (!runId) return NextResponse.json({ error: "runId requis" }, { status: 400 });
 
+  const statsJson = stats ? JSON.stringify(stats) : null;
+
   if (error) {
-    await pool.query(`UPDATE runs SET status='error', error=$2, finished_at=now() WHERE id=$1`, [
-      runId,
-      String(error),
-    ]);
+    await pool.query(
+      `UPDATE runs SET status='error', error=$2, stats=$3, finished_at=now() WHERE id=$1`,
+      [runId, String(error), statsJson]
+    );
     return NextResponse.json({ ok: true });
   }
 
@@ -47,8 +51,8 @@ export async function POST(req: NextRequest) {
     .sort((a, b) => b.marginPct - a.marginPct);
 
   await pool.query(
-    `UPDATE runs SET status='done', count=$2, results=$3, finished_at=now() WHERE id=$1`,
-    [runId, scored.length, JSON.stringify(scored)]
+    `UPDATE runs SET status='done', count=$2, results=$3, stats=$4, finished_at=now() WHERE id=$1`,
+    [runId, scored.length, JSON.stringify(scored), statsJson]
   );
 
   return NextResponse.json({ ok: true, scored: scored.length });
