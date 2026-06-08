@@ -1,75 +1,75 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
-type Zone = {
-  id: string;
-  label: string;
-  resale_eur_per_m2: number | null;
+type Cfg = { id: number; name: string; criteria: any; updated_at: string };
+type Run = {
+  id: number;
+  config_name: string;
+  status: string;
+  count: number;
+  started_at: string;
 };
-type ZoneTree = Zone & { quartiers: Zone[] };
 
-export default function SettingsPage() {
-  const [tree, setTree] = useState<ZoneTree[]>([]);
-  const [vals, setVals] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+/** Résumé court de la zone d'une config pour l'affichage en liste. */
+function summarizeZones(criteria: any): string {
+  if (Array.isArray(criteria?.locCodes) && criteria.locCodes.length) {
+    if (criteria.locCodes.includes("L9-luxembourg")) return "Tout Luxembourg-Ville";
+    const n = criteria.locCodes.length;
+    return `${n} quartier${n > 1 ? "s" : ""}`;
+  }
+  // Rétro-compat S1 : anciennes configs avec `communes`
+  if (Array.isArray(criteria?.communes) && criteria.communes.length) {
+    return criteria.communes.join(", ");
+  }
+  return "—";
+}
 
+/** Résumé CPE : "toutes" si aucune classe filtrée, sinon la concaténation. */
+function summarizeCpe(criteria: any): string {
+  const c = criteria?.cpeClasses;
+  return Array.isArray(c) && c.length ? c.join("") : "toutes";
+}
+
+export default function Dashboard() {
+  const [configs, setConfigs] = useState<Cfg[]>([]);
+  const [runs, setRuns] = useState<Run[]>([]);
+  const [busy, setBusy] = useState<number | null>(null);
+  const router = useRouter();
+
+  async function load() {
+    const [c, r] = await Promise.all([
+      fetch("/api/configs").then((x) => x.json()),
+      fetch("/api/runs").then((x) => x.json()),
+    ]);
+    setConfigs(Array.isArray(c) ? c : []);
+    setRuns(Array.isArray(r) ? r : []);
+  }
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch("/api/zone-prices", { cache: "no-store" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = await res.json();
-        const t: ZoneTree[] = json.zones || [];
-        setTree(t);
-        const v: Record<string, string> = {};
-        for (const city of t) {
-          v[city.id] = city.resale_eur_per_m2 != null ? String(city.resale_eur_per_m2) : "";
-          for (const q of city.quartiers) {
-            v[q.id] = q.resale_eur_per_m2 != null ? String(q.resale_eur_per_m2) : "";
-          }
-        }
-        setVals(v);
-      } catch (e) {
-        setMsg({ kind: "err", text: "Impossible de charger les prix." });
-      } finally {
-        setLoading(false);
-      }
-    })();
+    load();
   }, []);
 
-  // Le prix par defaut est porte par la ville (1ʳᵉ ville de l'arbre).
-  const defaultPrice = useMemo(() => {
-    const city = tree[0];
-    if (!city) return 0;
-    const raw = vals[city.id];
-    return raw && raw.trim() !== "" ? Number(raw) : 0;
-  }, [tree, vals]);
-
-  function set(id: string, value: string) {
-    setVals((p) => ({ ...p, [id]: value }));
-    setMsg(null);
-  }
-
-  async function save() {
-    setBusy(true);
-    setMsg(null);
-    const prices: Record<string, number | null> = {};
-    for (const [id, v] of Object.entries(vals)) {
-      prices[id] = v.trim() === "" ? null : Number(v);
-    }
-    const res = await fetch("/api/zone-prices", {
+  async function relancer(id: number) {
+    setBusy(id);
+    const res = await fetch("/api/trigger", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ prices }),
+      body: JSON.stringify({ configId: id }),
     });
-    setBusy(false);
-    if (res.ok) setMsg({ kind: "ok", text: "Prix enregistrés." });
-    else {
-      const d = await res.json().catch(() => ({}));
-      setMsg({ kind: "err", text: d.error || "Erreur à l'enregistrement." });
-    }
+    const data = await res.json();
+    setBusy(null);
+    if (data.runId) router.push(`/runs/${data.runId}`);
+  }
+
+  async function supprimer(id: number) {
+    if (!confirm("Supprimer cette config ?")) return;
+    await fetch(`/api/configs/${id}`, { method: "DELETE" });
+    load();
+  }
+
+  async function logout() {
+    await fetch("/api/logout", { method: "POST" });
+    router.push("/login");
   }
 
   return (
@@ -77,69 +77,66 @@ export default function SettingsPage() {
       <div className="topbar">
         <div className="brand">
           <span className="dot" />
-          <h1>Prix de revente</h1>
+          <h1>BBInvest</h1>
+          <small>atHome · achat-revente</small>
         </div>
-        <a className="btn ghost" href="/">← Retour</a>
+        <div className="row" style={{ flex: "0 0 auto", alignItems: "center" }}>
+          <a className="btn ghost" href="/settings">⚙ Prix de revente</a>
+          <button className="btn ghost" onClick={logout}>Déconnexion</button>
+        </div>
       </div>
 
-      <p className="muted" style={{ marginTop: 0 }}>
-        Prix de revente cible au m² par quartier, utilisés pour scorer chaque bien. Un quartier
-        laissé vide hérite du prix par défaut. Ces prix s'appliquent au prochain run.
-      </p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div className="section-title" style={{ flex: 1, margin: 0 }}>
+          <h2>Recherches sauvegardées</h2>
+          <span className="rule" />
+        </div>
+        <button className="btn clay" onClick={() => router.push("/search/new")}>
+          + Nouvelle recherche
+        </button>
+      </div>
 
-      {loading && <p className="empty">Chargement…</p>}
-
-      {!loading &&
-        tree.map((city) => (
-          <div key={city.id} style={{ marginBottom: 22 }}>
-            <div className="card">
-              <label>Prix par défaut — {city.label} (€/m²)</label>
-              <input
-                type="number"
-                value={vals[city.id] ?? ""}
-                onChange={(e) => set(city.id, e.target.value)}
-                placeholder="ex : 11000"
-                style={{ maxWidth: 220 }}
-              />
-              <p className="muted" style={{ fontSize: "0.8rem", marginBottom: 0, marginTop: 8 }}>
-                Appliqué à tout quartier non calibré ci-dessous.
-              </p>
-            </div>
-
-            <div className="section-title">
-              <h2>Quartiers</h2>
-              <span className="rule" />
-            </div>
-
-            <div className="card">
-              <div className="grid cols-2">
-                {city.quartiers.map((q) => (
-                  <div key={q.id}>
-                    <label>{q.label} (€/m²)</label>
-                    <input
-                      type="number"
-                      value={vals[q.id] ?? ""}
-                      onChange={(e) => set(q.id, e.target.value)}
-                      placeholder={defaultPrice ? `défaut : ${defaultPrice}` : "défaut"}
-                    />
-                  </div>
-                ))}
+      <div style={{ marginTop: 16 }}>
+        {configs.length === 0 && <p className="empty">Aucune config. Crée ta première recherche.</p>}
+        {configs.map((c) => (
+          <div className="list-item" key={c.id}>
+            <div>
+              <strong>{c.name}</strong>
+              <div className="muted" style={{ fontSize: "0.85rem", marginTop: 2 }}>
+                {c.criteria?.propertyType} · ≤ {c.criteria?.surfaceMax ?? "—"} m² ·{" "}
+                CPE {summarizeCpe(c.criteria)}
+                {c.criteria?.includeNew ? " · neuf inclus" : ""} · {summarizeZones(c.criteria)}
               </div>
+            </div>
+            <div className="row" style={{ flex: "0 0 auto" }}>
+              <button className="btn" onClick={() => relancer(c.id)} disabled={busy === c.id}>
+                {busy === c.id ? "..." : "Relancer"}
+              </button>
+              <button className="btn ghost" onClick={() => supprimer(c.id)}>✕</button>
             </div>
           </div>
         ))}
-
-      {msg && (
-        <div className={msg.kind === "err" ? "error" : ""} style={msg.kind === "ok" ? { color: "var(--go)", fontWeight: 600 } : undefined}>
-          {msg.text}
-        </div>
-      )}
-
-      <div className="row" style={{ marginTop: 18 }}>
-        <button className="btn clay" onClick={save} disabled={busy || loading}>
-          {busy ? "..." : "Enregistrer les prix"}
-        </button>
       </div>
+
+      <div className="section-title">
+        <h2>Dernières recherches</h2>
+        <span className="rule" />
+      </div>
+      {runs.length === 0 && <p className="empty">Aucune recherche lancée pour l'instant.</p>}
+      {runs.map((r) => (
+        <a className="list-item" key={r.id} href={`/runs/${r.id}`} style={{ textDecoration: "none", color: "inherit" }}>
+          <div>
+            <strong>{r.config_name || "—"}</strong>
+            <div className="muted" style={{ fontSize: "0.85rem", marginTop: 2 }}>
+              {new Date(r.started_at).toLocaleString("fr-FR")}
+            </div>
+          </div>
+          <div className="row" style={{ flex: "0 0 auto", alignItems: "center" }}>
+            <span className="badge">{r.status}</span>
+            <span className="mono">{r.count} biens</span>
+          </div>
+        </a>
+      ))}
     </div>
   );
 }
