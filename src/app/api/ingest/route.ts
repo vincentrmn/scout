@@ -118,14 +118,13 @@ export async function POST(req: NextRequest) {
     [runId, scored.length, JSON.stringify(scored), statsJson]
   );
 
-  // S6 Phase 3 — Nouveautes : sur un run de veille, capture les biens VUS POUR
-  // LA 1ere FOIS et classes GO/NEGOCIER. PK listing_id => dedup (1 entree/bien).
+  // S6 Phase 3 — Nouveautes : sur un run de veille, capture TOUS les biens classes
+  // GO/NEGOCIER. PK listing_id + ON CONFLICT DO NOTHING => 1 entree par bien (un bien
+  // deja flague ne reapparait pas). Le 1er passage remplit a partir des opportunites existantes.
   if (is_watch) {
-    const fresh = scored.filter(
-      (s) => !prevPriceMap.has(s.id) && (s.verdict === "GO" || s.verdict === "NEGOCIER")
-    );
+    const opportunities = scored.filter((s) => s.verdict === "GO" || s.verdict === "NEGOCIER");
     await Promise.all(
-      fresh.map((s) =>
+      opportunities.map((s) =>
         pool.query(
           `INSERT INTO findings (listing_id, run_id, config_name, verdict, margin_pct, price)
            VALUES ($1, $2, $3, $4, $5, $6)
