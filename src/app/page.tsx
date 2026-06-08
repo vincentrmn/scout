@@ -25,6 +25,12 @@ function summarizeZones(criteria: any): string {
   return "—";
 }
 
+/** Résumé CPE : "toutes" si aucune classe filtrée, sinon la concaténation. */
+function summarizeCpe(criteria: any): string {
+  const c = criteria?.cpeClasses;
+  return Array.isArray(c) && c.length ? c.join("") : "toutes";
+}
+
 export default function Dashboard() {
   const [configs, setConfigs] = useState<Cfg[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
@@ -95,7 +101,8 @@ export default function Dashboard() {
               <strong>{c.name}</strong>
               <div className="muted" style={{ fontSize: "0.85rem", marginTop: 2 }}>
                 {c.criteria?.propertyType} · ≤ {c.criteria?.surfaceMax ?? "—"} m² ·{" "}
-                CPE {(c.criteria?.cpeClasses || []).join("")} · {summarizeZones(c.criteria)}
+                CPE {summarizeCpe(c.criteria)}
+                {c.criteria?.includeNew ? " · neuf inclus" : ""} · {summarizeZones(c.criteria)}
               </div>
             </div>
             <div className="row" style={{ flex: "0 0 auto" }}>
