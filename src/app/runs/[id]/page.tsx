@@ -87,7 +87,10 @@ export default function RunPage({ params }: { params: { id: string } }) {
           <span className="dot" />
           <h1>{run?.config_name || "Résultats"}</h1>
         </div>
-        <a className="btn ghost" href="/">← Retour</a>
+        <div style={{ display: "flex", gap: 10 }}>
+          <a className="btn ghost" href="/tracked">★ Suivis</a>
+          <a className="btn ghost" href="/">← Retour</a>
+        </div>
       </div>
 
       {!run && <p className="empty">Chargement…</p>}

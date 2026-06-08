@@ -11,21 +11,18 @@ type Run = {
   started_at: string;
 };
 
-/** Résumé court de la zone d'une config pour l'affichage en liste. */
 function summarizeZones(criteria: any): string {
   if (Array.isArray(criteria?.locCodes) && criteria.locCodes.length) {
     if (criteria.locCodes.includes("L9-luxembourg")) return "Tout Luxembourg-Ville";
     const n = criteria.locCodes.length;
     return `${n} quartier${n > 1 ? "s" : ""}`;
   }
-  // Rétro-compat S1 : anciennes configs avec `communes`
   if (Array.isArray(criteria?.communes) && criteria.communes.length) {
     return criteria.communes.join(", ");
   }
   return "—";
 }
 
-/** Résumé CPE : "toutes" si aucune classe filtrée, sinon la concaténation. */
 function summarizeCpe(criteria: any): string {
   const c = criteria?.cpeClasses;
   return Array.isArray(c) && c.length ? c.join("") : "toutes";
@@ -45,9 +42,7 @@ export default function Dashboard() {
     setConfigs(Array.isArray(c) ? c : []);
     setRuns(Array.isArray(r) ? r : []);
   }
-  useEffect(() => {
-    load();
-  }, []);
+  useEffect(() => { load(); }, []);
 
   async function relancer(id: number) {
     setBusy(id);
@@ -77,9 +72,9 @@ export default function Dashboard() {
       <div className="topbar">
         <div className="brand">
           <span className="dot" />
-        
         </div>
         <div className="row" style={{ flex: "0 0 auto", alignItems: "center" }}>
+          <a className="btn ghost" href="/tracked">★ Suivis</a>
           <a className="btn ghost" href="/settings">⚙ Prix de revente</a>
           <button className="btn ghost" onClick={logout}>Déconnexion</button>
         </div>
