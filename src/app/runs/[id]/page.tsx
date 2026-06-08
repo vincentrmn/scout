@@ -7,12 +7,17 @@ type Scored = {
   netProfit: number; marginPct: number; maxBuyPrice: number;
   verdict: "GO" | "NEGOCIER" | "PASS";
 };
+type RunStats = {
+  totalAtHome: number; pagesFetched: number; pagesPlanned: number;
+  countSold: number; countNew: number; capped: boolean;
+};
 type Run = {
   id: number; config_name: string; status: string; count: number;
-  error?: string; started_at: string; results: Scored[];
+  error?: string; started_at: string; results: Scored[]; stats?: RunStats | null;
 };
 
 const eur = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n)) + " €";
+const plur = (n: number) => (n > 1 ? "s" : "");
 
 export default function RunPage({ params }: { params: { id: string } }) {
   const [run, setRun] = useState<Run | null>(null);
@@ -28,6 +33,8 @@ export default function RunPage({ params }: { params: { id: string } }) {
     tick();
     return () => { stop = true; };
   }, [params.id]);
+
+  const stats = run?.stats;
 
   return (
     <div className="wrap">
@@ -50,8 +57,29 @@ export default function RunPage({ params }: { params: { id: string } }) {
 
       {run?.status === "done" && (
         <>
+          {stats && (
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: "0.9rem" }}>
+                <strong>{stats.totalAtHome}</strong> bien{plur(stats.totalAtHome)} trouvé{plur(stats.totalAtHome)} sur atHome ·{" "}
+                <strong>{stats.pagesFetched}</strong> page{plur(stats.pagesFetched)} scrapée{plur(stats.pagesFetched)}
+                {stats.pagesPlanned > stats.pagesFetched ? ` sur ${stats.pagesPlanned} prévues` : ""} ·{" "}
+                après filtres : <strong>{run.count}</strong> bien{plur(run.count)} analysé{plur(run.count)}.
+              </div>
+              {stats.capped && (
+                <div className="error" style={{ marginTop: 8 }}>
+                  ⚠️ Limite atteinte (50 pages ≈ 1000 biens). Augmente <span className="mono">maxPages</span> ou affine tes filtres.
+                </div>
+              )}
+              {(stats.countSold > 0 || stats.countNew > 0) && (
+                <div className="muted" style={{ fontSize: "0.78rem", marginTop: 8 }}>
+                  Exclus : {stats.countSold} vendu{plur(stats.countSold)}, {stats.countNew} neuf{plur(stats.countNew)}.
+                </div>
+              )}
+            </div>
+          )}
+
           <p className="muted">
-            {run.count} biens · lancé le {new Date(run.started_at).toLocaleString("fr-FR")}
+            {run.count} bien{plur(run.count)} · lancé le {new Date(run.started_at).toLocaleString("fr-FR")}
           </p>
           {run.count === 0 && <p className="empty">Aucun bien ne correspond aux critères.</p>}
           {run.count > 0 && (
