@@ -6,24 +6,14 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // POST /api/cron/run-all  (header: x-cron-secret)
-// VERSION DIAGNOSTIC TEMPORAIRE : en cas de mismatch, renvoie des infos sures
-// (longueurs + booleens, jamais la valeur) pour localiser la cause.
+// Appele par n8n (Schedule) chaque matin. Relance toutes les configs en veille,
+// chaque run marque is_watch=true (=> alimente les Nouveautes en Phase 3).
+// Public au niveau middleware, protege ici par CRON_SECRET.
 export async function POST(req: NextRequest) {
   const expected = process.env.CRON_SECRET || "";
   const got = req.headers.get("x-cron-secret") || "";
   if (!expected || got !== expected) {
-    return NextResponse.json(
-      {
-        error: "secret invalide",
-        debug: {
-          envSet: !!process.env.CRON_SECRET, // false => CRON_SECRET absent du process (pas redeploye / pas pose)
-          envLen: expected.length,           // 48 attendu
-          gotLen: got.length,                // 48 attendu (0 => header non recu)
-          match: got === expected,           // doit etre true
-        },
-      },
-      { status: 401 }
-    );
+    return NextResponse.json({ error: "secret invalide" }, { status: 401 });
   }
 
   await ensureSchema();
