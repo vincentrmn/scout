@@ -5,8 +5,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // GET /api/findings?page=0&pageSize=30
-// Opportunites decouvertes par les veilles, plus recentes d'abord, paginees.
-// Jointure listings pour les infos courantes + etat de suivi.
+// Flux d'evenements de veille (new | price_drop), plus recents d'abord, pagine.
 export async function GET(req: NextRequest) {
   try {
     await ensureSchema();
@@ -20,8 +19,8 @@ export async function GET(req: NextRequest) {
 
     const { rows } = await pool.query(
       `SELECT
-         f.listing_id, f.run_id, f.config_name, f.verdict,
-         f.margin_pct::float AS margin_pct, f.price, f.found_at,
+         f.id, f.listing_id, f.run_id, f.config_name, f.kind, f.verdict,
+         f.margin_pct::float AS margin_pct, f.price, f.prev_price, f.found_at,
          l.url, l.title, l.surface::float AS surface, l.commune, l.cpe, l.tracked
        FROM findings f
        JOIN listings l ON l.id = f.listing_id

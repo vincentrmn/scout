@@ -154,17 +154,38 @@ export function ensureSchema(): Promise<void> {
       );
 
       // -------------------------------------------------------------------
-      // S6 Phase 3 — Nouveautes : opportunites (GO/NEGOCIER) decouvertes pour
-      // la 1ere fois lors d'une veille. listing_id en PK => une entree par bien.
+      // S6 Phase 3 — Nouveautes : flux d'EVENEMENTS detectes par la veille.
+      //   kind = 'new'        -> bien jamais vu (GO/NEGOCIER)
+      //   kind = 'price_drop' -> bien connu dont le prix a baisse (GO/NEGOCIER)
+      // Une ligne par evenement (id SERIAL), pas par bien.
+      // Migration sure : si l'ancienne table (listing_id en PK, sans 'kind')
+      // existe, on la recree. Garde par le test sur la colonne 'kind' => ne
+      // s'execute qu'une fois ; aucune perte une fois migree.
       // -------------------------------------------------------------------
       await pool.query(`
+        DO $$
+        BEGIN
+          IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'findings')
+             AND NOT EXISTS (
+               SELECT 1 FROM information_schema.columns
+               WHERE table_name = 'findings' AND column_name = 'kind'
+             )
+          THEN
+            DROP TABLE findings;
+          END IF;
+        END $$;
+      `);
+      await pool.query(`
         CREATE TABLE IF NOT EXISTS findings (
-          listing_id  TEXT PRIMARY KEY REFERENCES listings(id) ON DELETE CASCADE,
+          id          SERIAL PRIMARY KEY,
+          listing_id  TEXT NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
           run_id      INTEGER REFERENCES runs(id) ON DELETE SET NULL,
           config_name TEXT,
+          kind        TEXT NOT NULL,
           verdict     TEXT,
           margin_pct  NUMERIC,
           price       INTEGER,
+          prev_price  INTEGER,
           found_at    TIMESTAMPTZ NOT NULL DEFAULT now()
         );
       `);

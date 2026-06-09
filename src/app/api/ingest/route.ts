@@ -118,18 +118,35 @@ export async function POST(req: NextRequest) {
     [runId, scored.length, JSON.stringify(scored), statsJson]
   );
 
-  // S6 Phase 3 — Nouveautes : sur un run de veille, capture TOUS les biens classes
-  // GO/NEGOCIER. PK listing_id + ON CONFLICT DO NOTHING => 1 entree par bien (un bien
-  // deja flague ne reapparait pas). Le 1er passage remplit a partir des opportunites existantes.
+  // S6 Phase 3 — Nouveautes : sur un run de veille, on enregistre des EVENEMENTS.
+  //   new        : bien jamais vu (absent de prevPriceMap) + GO/NEGOCIER -> 1x par bien.
+  //   price_drop : bien connu, prix scrape < prix stocke + GO/NEGOCIER -> 1x par baisse
+  //                (l'upsert a deja mis a jour le prix => le run suivant ne re-detecte pas).
   if (is_watch) {
-    const opportunities = scored.filter((s) => s.verdict === "GO" || s.verdict === "NEGOCIER");
+    type FindingEvent = {
+      listing_id: string;
+      kind: "new" | "price_drop";
+      verdict: string;
+      margin: number;
+      price: number;
+      prevPrice: number | null;
+    };
+    const events: FindingEvent[] = [];
+    for (const s of scored) {
+      if (s.verdict !== "GO" && s.verdict !== "NEGOCIER") continue;
+      const prev = prevPriceMap.get(s.id);
+      if (prev === undefined) {
+        events.push({ listing_id: s.id, kind: "new", verdict: s.verdict, margin: s.marginPct, price: s.price, prevPrice: null });
+      } else if (s.price < prev) {
+        events.push({ listing_id: s.id, kind: "price_drop", verdict: s.verdict, margin: s.marginPct, price: s.price, prevPrice: prev });
+      }
+    }
     await Promise.all(
-      opportunities.map((s) =>
+      events.map((e) =>
         pool.query(
-          `INSERT INTO findings (listing_id, run_id, config_name, verdict, margin_pct, price)
-           VALUES ($1, $2, $3, $4, $5, $6)
-           ON CONFLICT (listing_id) DO NOTHING`,
-          [s.id, runId, config_name, s.verdict, s.marginPct, s.price]
+          `INSERT INTO findings (listing_id, run_id, config_name, kind, verdict, margin_pct, price, prev_price)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [e.listing_id, runId, config_name, e.kind, e.verdict, e.margin, e.price, e.prevPrice]
         )
       )
     );
