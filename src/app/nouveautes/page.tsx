@@ -24,6 +24,12 @@ type Payload = { items: Finding[]; total: number; page: number; pageSize: number
 
 const eur = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n)) + " €";
 
+// Affichage des verdicts (valeurs stockées inchangées).
+const VERDICT_LABEL: Record<Finding["verdict"], string> = {
+  GO: "OK",
+  NEGOCIER: "Négocier",
+};
+
 export default function NouveautesPage() {
   const [data, setData] = useState<Payload | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -140,7 +146,7 @@ export default function NouveautesPage() {
                       <td className="num">{f.surface ?? "—"}</td>
                       <td>{f.cpe ? <span className="badge">{f.cpe}</span> : "—"}</td>
                       <td className="num">{f.margin_pct != null ? `${f.margin_pct}%` : "—"}</td>
-                      <td><span className={`verdict ${f.verdict}`}>{f.verdict}</span></td>
+                      <td><span className={`verdict ${f.verdict}`}>{VERDICT_LABEL[f.verdict] ?? f.verdict}</span></td>
                       <td>
                         <span style={{ fontSize: "0.82rem" }} className="muted">
                           {new Date(f.found_at).toLocaleDateString("fr-FR")}

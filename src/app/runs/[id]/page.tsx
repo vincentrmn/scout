@@ -22,6 +22,13 @@ type Run = {
 const eur = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n)) + " €";
 const plur = (n: number) => (n > 1 ? "s" : "");
 
+// Affichage des verdicts (les valeurs stockées restent GO/NEGOCIER/PASS).
+const VERDICT_LABEL: Record<Scored["verdict"], string> = {
+  GO: "OK",
+  NEGOCIER: "Négocier",
+  PASS: "KO",
+};
+
 function DetailRow({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "5px 0", borderBottom: "1px solid var(--line)" }}>
@@ -125,23 +132,31 @@ export default function RunPage({ params }: { params: { id: string } }) {
             </div>
           )}
 
-          <p className="muted">
-            {run.count} bien{plur(run.count)} · lancé le {new Date(run.started_at).toLocaleString("fr-FR")}
-          </p>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 16, flexWrap: "wrap" }}>
+            <p className="muted" style={{ margin: "0 0 12px" }}>
+              {run.count} bien{plur(run.count)} · lancé le {new Date(run.started_at).toLocaleString("fr-FR")}
+            </p>
+            {/* Légende des verdicts (seuils du moteur de scoring) */}
+            <p className="muted" style={{ margin: "0 0 12px", fontSize: "0.8rem", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span><span className="verdict GO">OK</span> marge ≥ cible</span>
+              <span><span className="verdict NEGOCIER">Négocier</span> ≥ moitié de la cible</span>
+              <span><span className="verdict PASS">KO</span> en dessous</span>
+            </p>
+          </div>
+
           {run.count === 0 && <p className="empty">Aucun bien ne correspond aux critères.</p>}
           {run.count > 0 && (
             <div className="card" style={{ padding: 0, overflowX: "auto" }}>
               <table>
                 <thead>
                   <tr>
-                    <th style={{ width: 28 }}></th>
+                    <th style={{ width: 40 }}></th>
                     <th>Bien</th>
                     <th className="num">Prix</th>
                     <th className="num">m²</th>
                     <th>CPE</th>
-                    <th className="num">Revente est.</th>
+                    <th className="num">Prix de revente</th>
                     <th className="num">Marge</th>
-                    <th className="num">Achat max</th>
                     <th>Verdict</th>
                     <th style={{ width: 36 }}></th>
                   </tr>
@@ -154,14 +169,29 @@ export default function RunPage({ params }: { params: { id: string } }) {
                       <Fragment key={r.id}>
                         <tr>
                           <td style={{ textAlign: "center" }}>
-                            <span
-                              role="button"
-                              aria-label={isOpen ? "Replier" : "Détail"}
+                            <button
+                              aria-label={isOpen ? "Replier le détail" : "Voir le détail du calcul"}
+                              title={isOpen ? "Replier" : "Détail du calcul"}
                               onClick={() => toggle(r.id)}
-                              style={{ cursor: "pointer", userSelect: "none", color: "var(--ink-soft)", display: "inline-block", transform: isOpen ? "rotate(90deg)" : "none", transition: "transform 0.12s ease" }}
+                              style={{
+                                background: "var(--paper-2)",
+                                border: "1px solid var(--line)",
+                                borderRadius: 8,
+                                width: 30,
+                                height: 30,
+                                cursor: "pointer",
+                                color: "var(--ink)",
+                                fontSize: "1rem",
+                                lineHeight: 1,
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                transform: isOpen ? "rotate(90deg)" : "none",
+                                transition: "transform 0.12s ease",
+                              }}
                             >
                               ▸
-                            </span>
+                            </button>
                           </td>
                           <td>
                             <a href={r.url} target="_blank" rel="noreferrer">{r.title || r.id}</a>
@@ -179,8 +209,7 @@ export default function RunPage({ params }: { params: { id: string } }) {
                           <td><span className="badge">{r.cpe || "—"}</span></td>
                           <td className="num">{eur(r.resaleValue)}</td>
                           <td className="num">{r.marginPct}%</td>
-                          <td className="num">{eur(r.maxBuyPrice)}</td>
-                          <td><span className={`verdict ${r.verdict}`}>{r.verdict}</span></td>
+                          <td><span className={`verdict ${r.verdict}`}>{VERDICT_LABEL[r.verdict]}</span></td>
                           <td style={{ textAlign: "center" }}>
                             <button
                               className={`star-btn ${isTracked ? "tracked" : ""}`}
@@ -193,7 +222,7 @@ export default function RunPage({ params }: { params: { id: string } }) {
                         </tr>
                         {isOpen && (
                           <tr>
-                            <td colSpan={10} style={{ background: "var(--paper-2)", padding: "12px 16px" }}>
+                            <td colSpan={9} style={{ background: "var(--paper-2)", padding: "12px 16px" }}>
                               <div className="grid cols-2" style={{ gap: "2px 32px" }}>
                                 <div>
                                   <DetailRow label="Prix affiché" value={eur(r.price)} />

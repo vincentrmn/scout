@@ -2,8 +2,8 @@ import "./globals.css";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "BBInvest — atHome",
-  description: "Recherche et scoring achat-revente",
+  title: "BBIscout",
+  description: "Repérage et scoring d'opportunités immobilières",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
