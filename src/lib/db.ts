@@ -140,6 +140,12 @@ export function ensureSchema(): Promise<void> {
         `CREATE INDEX IF NOT EXISTS listings_tracked_idx ON listings (tracked) WHERE tracked = true;`
       );
 
+      // S7 — Suivi collaboratif : statut de pipeline par bien suivi.
+      // 'to_contact' | 'contacted' | 'visit' | 'offer' | 'won' | 'lost'
+      await pool.query(
+        `ALTER TABLE listings ADD COLUMN IF NOT EXISTS follow_status TEXT NOT NULL DEFAULT 'to_contact';`
+      );
+
       // S6 Phase 1 — Historique de prix
       await pool.query(`
         CREATE TABLE IF NOT EXISTS listing_snapshots (
@@ -153,15 +159,7 @@ export function ensureSchema(): Promise<void> {
         `CREATE INDEX IF NOT EXISTS listing_snapshots_listing_idx ON listing_snapshots (listing_id, seen_at);`
       );
 
-      // -------------------------------------------------------------------
-      // S6 Phase 3 — Nouveautes : flux d'EVENEMENTS detectes par la veille.
-      //   kind = 'new'        -> bien jamais vu (GO/NEGOCIER)
-      //   kind = 'price_drop' -> bien connu dont le prix a baisse (GO/NEGOCIER)
-      // Une ligne par evenement (id SERIAL), pas par bien.
-      // Migration sure : si l'ancienne table (listing_id en PK, sans 'kind')
-      // existe, on la recree. Garde par le test sur la colonne 'kind' => ne
-      // s'execute qu'une fois ; aucune perte une fois migree.
-      // -------------------------------------------------------------------
+      // S6 Phase 3 — Nouveautes (evenements de veille)
       await pool.query(`
         DO $$
         BEGIN
@@ -190,6 +188,29 @@ export function ensureSchema(): Promise<void> {
         );
       `);
       await pool.query(`CREATE INDEX IF NOT EXISTS findings_found_idx ON findings (found_at DESC);`);
+
+      // -------------------------------------------------------------------
+      // S7 — Suivi collaboratif : fil de remarques + journal des statuts.
+      //   kind = 'note'   -> remarque ecrite (body = texte)
+      //   kind = 'status' -> changement de statut (body = nouveau statut, cle interne)
+      // Append-only => aucune collision possible entre Vincent et Jamie.
+      // -------------------------------------------------------------------
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS listing_notes (
+          id          SERIAL PRIMARY KEY,
+          listing_id  TEXT NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
+          author      TEXT NOT NULL,
+          kind        TEXT NOT NULL DEFAULT 'note',
+          body        TEXT NOT NULL,
+          created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+      `);
+      await pool.query(
+        `CREATE INDEX IF NOT EXISTS listing_notes_listing_idx ON listing_notes (listing_id, created_at);`
+      );
+      await pool.query(
+        `CREATE INDEX IF NOT EXISTS listing_notes_created_idx ON listing_notes (created_at DESC);`
+      );
     })();
   }
   return global._bbinvestSchema;

@@ -90,11 +90,9 @@ export default function RunPage({ params }: { params: { id: string } }) {
   return (
     <div className="wrap">
       <div className="topbar">
-        <div className="brand">
-          <a className="brand-home" href="/" title="Accueil">SCOUT</a>
-          <h1>{run?.config_name || "Résultats"}</h1>
-        </div>
-        <div style={{ display: "flex", gap: 10 }}>
+        <a className="brand-home" href="/" title="Accueil">SCOUT</a>
+        <h1 className="page-title">{run?.config_name || "Résultats"}</h1>
+        <div className="topbar-nav">
           <a className="btn ghost" href="/tracked">★ Suivis</a>
           <a className="btn ghost" href="/">← Retour</a>
         </div>

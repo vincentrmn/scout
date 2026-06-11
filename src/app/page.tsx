@@ -68,7 +68,25 @@ export default function Dashboard() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [busy, setBusy] = useState<number | null>(null);
   const [openCfg, setOpenCfg] = useState<Record<number, boolean>>({});
+  const [showRuns, setShowRuns] = useState(false);
+  const [hasNewActivity, setHasNewActivity] = useState(false);
   const router = useRouter();
+
+  // Badge "activité non vue" : derniere entree du journal de suivi vs ma derniere visite.
+  useEffect(() => {
+    (async () => {
+      try {
+        const me = window.localStorage.getItem("scout_me");
+        if (!me) return;
+        const last = await fetch("/api/listings/notes?latest=1").then((r) => r.json());
+        if (!last || !last.created_at) return;
+        const seen = window.localStorage.getItem(`scout_seen_${me}`);
+        if (last.author !== me && (!seen || new Date(last.created_at) > new Date(seen))) {
+          setHasNewActivity(true);
+        }
+      } catch {}
+    })();
+  }, []);
 
   async function load() {
     const [c, r] = await Promise.all([
@@ -114,12 +132,23 @@ export default function Dashboard() {
   return (
     <div className="wrap">
       <div className="topbar">
-        <div className="brand">
-          <a className="brand-home" href="/" title="Accueil">SCOUT</a>
-        </div>
-        <div className="row" style={{ flex: "0 0 auto", alignItems: "center" }}>
+        <a className="brand-home" href="/" title="Accueil">SCOUT</a>
+        <span className="page-title" />
+        <div className="topbar-nav">
           <a className="btn ghost" href="/nouveautes">✨ Nouveautés</a>
-          <a className="btn ghost" href="/tracked">★ Suivis</a>
+          <a className="btn ghost" href="/tracked" style={{ position: "relative" }}>
+            ★ Suivis
+            {hasNewActivity && (
+              <span
+                title="Nouvelle activité sur les suivis"
+                style={{
+                  position: "absolute", top: -4, right: -4,
+                  width: 12, height: 12, borderRadius: "50%",
+                  background: "var(--green)", border: "2px solid #fff",
+                }}
+              />
+            )}
+          </a>
           <a className="btn ghost" href="/settings">⚙ Prix de revente</a>
         </div>
       </div>
@@ -222,12 +251,20 @@ export default function Dashboard() {
         })}
       </div>
 
-      <div className="section-title">
-        <h2>Dernières recherches</h2>
+      <div
+        className="section-title"
+        onClick={() => setShowRuns((v) => !v)}
+        style={{ cursor: "pointer", userSelect: "none" }}
+        title={showRuns ? "Replier" : "Déplier"}
+      >
+        <h2>
+          <span style={{ display: "inline-block", transform: showRuns ? "rotate(90deg)" : "none", transition: "transform 0.12s ease", marginRight: 8 }}>▸</span>
+          Dernières recherches{runs.length > 0 ? ` (${runs.length})` : ""}
+        </h2>
         <span className="rule" />
       </div>
-      {runs.length === 0 && <p className="empty">Aucune recherche lancée pour l'instant.</p>}
-      {runs.map((r) => (
+      {showRuns && runs.length === 0 && <p className="empty">Aucune recherche lancée pour l'instant.</p>}
+      {showRuns && runs.map((r) => (
         <a className="list-item" key={r.id} href={`/runs/${r.id}`} style={{ textDecoration: "none", color: "inherit" }}>
           <div>
             <strong>{r.config_name || "—"}</strong>

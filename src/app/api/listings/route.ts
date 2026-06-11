@@ -8,7 +8,8 @@ export const dynamic = "force-dynamic";
 
 // GET /api/listings?tracked=1
 // Biens suivis, enrichis : re-scoring a la volee (DEFAULT_SCORING + prix zone,
-// sans verdict) + historique de prix (S6 Phase 1).
+// sans verdict), historique de prix (S6) et suivi collaboratif (S7 :
+// follow_status + fil de notes/journal).
 export async function GET() {
   try {
     await ensureSchema();
@@ -18,6 +19,7 @@ export async function GET() {
         surface::float AS surface,
         commune, rooms, title, url, cpe,
         first_seen, last_seen, tracked, tracked_at,
+        follow_status,
         CASE
           WHEN prev_price IS NOT NULL AND prev_price <> price
           THEN price - prev_price
@@ -30,8 +32,11 @@ export async function GET() {
 
     const ids = rows.map((r) => r.id);
 
-    // S6 Phase 1 — historique de prix de chaque bien suivi (un seul SELECT).
+    // S6 Phase 1 — historique de prix (un seul SELECT batch).
     const histMap = new Map<string, { price: number; seen_at: string }[]>();
+    // S7 — fil de notes + journal (un seul SELECT batch).
+    const notesMap = new Map<string, { id: number; author: string; kind: string; body: string; created_at: string }[]>();
+
     if (ids.length > 0) {
       const { rows: snaps } = await pool.query<{
         listing_id: string;
@@ -48,14 +53,34 @@ export async function GET() {
         if (!histMap.has(s.listing_id)) histMap.set(s.listing_id, []);
         histMap.get(s.listing_id)!.push({ price: s.price, seen_at: s.seen_at });
       }
+
+      const { rows: notes } = await pool.query<{
+        id: number;
+        listing_id: string;
+        author: string;
+        kind: string;
+        body: string;
+        created_at: string;
+      }>(
+        `SELECT id, listing_id, author, kind, body, created_at
+         FROM listing_notes
+         WHERE listing_id = ANY($1)
+         ORDER BY created_at ASC`,
+        [ids]
+      );
+      for (const n of notes) {
+        if (!notesMap.has(n.listing_id)) notesMap.set(n.listing_id, []);
+        notesMap.get(n.listing_id)!.push({ id: n.id, author: n.author, kind: n.kind, body: n.body, created_at: n.created_at });
+      }
     }
 
     // Re-scoring config-independant : DEFAULT_SCORING + prix de revente par zone.
     const priceMap = await getZonePriceMap();
     const enriched = rows.map((row) => {
       const history = histMap.get(row.id) ?? [];
+      const notes = notesMap.get(row.id) ?? [];
       if (!row.surface || row.surface <= 0) {
-        return { ...row, marginPct: null, history };
+        return { ...row, marginPct: null, history, notes };
       }
       const { resalePerM2, priceIsDefault } = resolveResalePerM2(row.commune, priceMap);
       const s = scoreListing(
@@ -86,6 +111,7 @@ export async function GET() {
         marginPct: s.marginPct,
         maxBuyPrice: s.maxBuyPrice,
         history,
+        notes,
       };
     });
 

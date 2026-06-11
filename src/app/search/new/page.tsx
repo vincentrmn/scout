@@ -115,11 +115,11 @@ export default function NewSearch() {
   return (
     <div className="wrap">
       <div className="topbar">
-        <div className="brand">
-          <a className="brand-home" href="/" title="Accueil">SCOUT</a>
-          <h1>Nouvelle recherche</h1>
+        <a className="brand-home" href="/" title="Accueil">SCOUT</a>
+        <h1 className="page-title">Nouvelle recherche</h1>
+        <div className="topbar-nav">
+          <a className="btn ghost" href="/">← Retour</a>
         </div>
-        <a className="btn ghost" href="/">← Retour</a>
       </div>
 
       <div className="card">

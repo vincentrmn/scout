@@ -75,11 +75,11 @@ export default function SettingsPage() {
   return (
     <div className="wrap">
       <div className="topbar">
-        <div className="brand">
-          <a className="brand-home" href="/" title="Accueil">SCOUT</a>
-          <h1>Prix de revente</h1>
+        <a className="brand-home" href="/" title="Accueil">SCOUT</a>
+        <h1 className="page-title">Prix de revente</h1>
+        <div className="topbar-nav">
+          <a className="btn ghost" href="/">← Retour</a>
         </div>
-        <a className="btn ghost" href="/">← Retour</a>
       </div>
 
       <p className="muted" style={{ marginTop: 0 }}>

@@ -70,11 +70,11 @@ export default function NouveautesPage() {
   return (
     <div className="wrap">
       <div className="topbar">
-        <div className="brand">
-          <a className="brand-home" href="/" title="Accueil">SCOUT</a>
-          <h1>Nouveautés</h1>
+        <a className="brand-home" href="/" title="Accueil">SCOUT</a>
+        <h1 className="page-title">Nouveautés</h1>
+        <div className="topbar-nav">
+          <a className="btn ghost" href="/">← Retour</a>
         </div>
-        <a className="btn ghost" href="/">← Retour</a>
       </div>
 
       {data === null && error === null && <p className="empty">Chargement…</p>}
