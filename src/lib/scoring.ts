@@ -21,6 +21,8 @@ export type Listing = {
   commune?: string;    // ex: "Luxembourg-Limpertsberg" — sert a resoudre le quartier
   cpe?: string;        // classe energetique (A..I)
   rooms?: number;
+  /** S8 — URLs des photos de l'annonce (extraites par n8n, max 6). */
+  photos?: string[];
 };
 
 export type Scored = Listing & {

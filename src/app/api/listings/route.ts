@@ -19,7 +19,7 @@ export async function GET() {
         surface::float AS surface,
         commune, rooms, title, url, cpe,
         first_seen, last_seen, tracked, tracked_at,
-        follow_status,
+        follow_status, photos,
         CASE
           WHEN prev_price IS NOT NULL AND prev_price <> price
           THEN price - prev_price

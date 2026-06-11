@@ -274,3 +274,23 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 }
 .expand-btn:hover { border-color: var(--green); }
 .expand-btn.open { transform: rotate(90deg); }
+
+/* --------------------------------------------------------------------------
+   S8 — Photos d'annonce dans les depliants (taille fixe, toujours proportionnees)
+   -------------------------------------------------------------------------- */
+.photo-strip {
+  display: flex; gap: 8px;
+  overflow-x: auto;
+  padding: 2px 0 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.photo-strip a { flex: 0 0 auto; display: block; line-height: 0; }
+.photo-strip img {
+  width: 150px; height: 112px;        /* 4:3 fixe pour toutes les photos */
+  object-fit: cover;                   /* recadre sans deformer */
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  display: block;
+  background: var(--paper-2);
+}

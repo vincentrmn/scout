@@ -67,11 +67,16 @@ export async function POST(req: NextRequest) {
   const prevPriceMap = new Map(prevRows.map((r) => [r.id, r.price]));
 
   // S5 — Upsert (ne touche jamais tracked / tracked_at / first_seen).
+  // S8 — photos : on n'ecrase jamais des photos existantes par un tableau vide
+  //      (un scrape qui rate les photos ne doit pas faire regresser la fiche).
   await Promise.all(
-    filtered.map((l) =>
-      pool.query(
-        `INSERT INTO listings (id, price, surface, commune, rooms, title, url, cpe)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    filtered.map((l) => {
+      const photos = Array.isArray(l.photos)
+        ? l.photos.filter((p) => typeof p === "string" && p.startsWith("http")).slice(0, 6)
+        : [];
+      return pool.query(
+        `INSERT INTO listings (id, price, surface, commune, rooms, title, url, cpe, photos)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
          ON CONFLICT (id) DO UPDATE SET
            last_seen  = now(),
            prev_price = CASE
@@ -84,10 +89,14 @@ export async function POST(req: NextRequest) {
            rooms   = EXCLUDED.rooms,
            title   = EXCLUDED.title,
            url     = EXCLUDED.url,
-           cpe     = EXCLUDED.cpe`,
-        [l.id, l.price, l.surface ?? null, l.commune ?? null, l.rooms ?? null, l.title ?? null, l.url, l.cpe ?? null]
-      )
-    )
+           cpe     = EXCLUDED.cpe,
+           photos  = CASE
+             WHEN jsonb_array_length(EXCLUDED.photos) > 0 THEN EXCLUDED.photos
+             ELSE listings.photos
+           END`,
+        [l.id, l.price, l.surface ?? null, l.commune ?? null, l.rooms ?? null, l.title ?? null, l.url, l.cpe ?? null, JSON.stringify(photos)]
+      );
+    })
   );
 
   // S6 Phase 1 — Snapshot de prix : si bien nouveau OU prix change.
@@ -119,9 +128,6 @@ export async function POST(req: NextRequest) {
   );
 
   // S6 Phase 3 — Nouveautes : sur un run de veille, on enregistre des EVENEMENTS.
-  //   new        : bien jamais vu (absent de prevPriceMap) + GO/NEGOCIER -> 1x par bien.
-  //   price_drop : bien connu, prix scrape < prix stocke + GO/NEGOCIER -> 1x par baisse
-  //                (l'upsert a deja mis a jour le prix => le run suivant ne re-detecte pas).
   if (is_watch) {
     type FindingEvent = {
       listing_id: string;

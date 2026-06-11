@@ -30,6 +30,7 @@ type TrackedListing = {
   maxBuyPrice?: number;
   history?: Snapshot[];
   notes?: Note[];
+  photos?: string[]; // S8
 };
 
 const eur = (n: number) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " €";
@@ -52,6 +53,26 @@ const statusLabel = (key?: string) =>
 
 const fmtDateTime = (iso: string) =>
   new Date(iso).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+
+function PhotoStrip({ photos }: { photos?: string[] }) {
+  if (!photos || photos.length === 0) return null;
+  return (
+    <div className="photo-strip">
+      {photos.map((src, i) => (
+        <a key={i} href={src} target="_blank" rel="noreferrer" title="Ouvrir la photo">
+          <img
+            src={src}
+            alt={`Photo ${i + 1}`}
+            loading="lazy"
+            onError={(e) => {
+              (e.currentTarget.parentElement as HTMLElement).style.display = "none";
+            }}
+          />
+        </a>
+      ))}
+    </div>
+  );
+}
 
 function DetailRow({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -339,6 +360,7 @@ export default function TrackedPage() {
                       {isOpen && (
                         <tr>
                           <td colSpan={9} style={{ background: "var(--paper-2)", padding: "12px 16px" }}>
+                            <PhotoStrip photos={l.photos} />
                             {hasScore && (
                               <div className="grid cols-2" style={{ gap: "2px 32px" }}>
                                 <div>

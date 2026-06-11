@@ -9,6 +9,7 @@ type Scored = {
   totalInvested: number; netProfit: number; marginPct: number; maxBuyPrice: number;
   verdict: "GO" | "NEGOCIER" | "PASS";
   priceDelta?: number | null; // S5
+  photos?: string[]; // S8
 };
 type RunStats = {
   totalAtHome: number; pagesFetched: number; pagesPlanned: number;
@@ -28,6 +29,26 @@ const VERDICT_LABEL: Record<Scored["verdict"], string> = {
   NEGOCIER: "Négocier",
   PASS: "KO",
 };
+
+function PhotoStrip({ photos }: { photos?: string[] }) {
+  if (!photos || photos.length === 0) return null;
+  return (
+    <div className="photo-strip">
+      {photos.map((src, i) => (
+        <a key={i} href={src} target="_blank" rel="noreferrer" title="Ouvrir la photo">
+          <img
+            src={src}
+            alt={`Photo ${i + 1}`}
+            loading="lazy"
+            onError={(e) => {
+              (e.currentTarget.parentElement as HTMLElement).style.display = "none";
+            }}
+          />
+        </a>
+      ))}
+    </div>
+  );
+}
 
 function DetailRow({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -206,6 +227,7 @@ export default function RunPage({ params }: { params: { id: string } }) {
                         {isOpen && (
                           <tr>
                             <td colSpan={9} style={{ background: "var(--paper-2)", padding: "12px 16px" }}>
+                              <PhotoStrip photos={r.photos} />
                               <div className="grid cols-2" style={{ gap: "2px 32px" }}>
                                 <div>
                                   <DetailRow label="Prix affiché" value={eur(r.price)} />

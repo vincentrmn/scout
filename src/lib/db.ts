@@ -146,6 +146,12 @@ export function ensureSchema(): Promise<void> {
         `ALTER TABLE listings ADD COLUMN IF NOT EXISTS follow_status TEXT NOT NULL DEFAULT 'to_contact';`
       );
 
+      // S8 — Photos de l'annonce (URLs atHome, max 6, extraites par n8n).
+      await pool.query(
+        `ALTER TABLE listings ADD COLUMN IF NOT EXISTS photos JSONB NOT NULL DEFAULT '[]';`
+      );
+      await pool.query(`UPDATE listings SET photos = '[]'::jsonb WHERE photos IS NULL;`);
+
       // S6 Phase 1 — Historique de prix
       await pool.query(`
         CREATE TABLE IF NOT EXISTS listing_snapshots (
