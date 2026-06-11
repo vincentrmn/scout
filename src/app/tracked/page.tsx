@@ -16,7 +16,6 @@ type TrackedListing = {
   last_seen: string;
   tracked_at?: string | null;
   price_delta?: number | null;
-  // Re-scoring a la volee (DEFAULT_SCORING + prix zone) — pas de verdict.
   resalePerM2?: number;
   priceIsDefault?: boolean;
   resaleValue?: number;
@@ -27,12 +26,10 @@ type TrackedListing = {
   netProfit?: number;
   marginPct?: number | null;
   maxBuyPrice?: number;
-  // S6 Phase 1
   history?: Snapshot[];
 };
 
-const eur = (n: number) =>
-  new Intl.NumberFormat("fr-FR").format(Math.round(n)) + " €";
+const eur = (n: number) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " €";
 
 const daysSince = (iso: string) =>
   Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
@@ -116,7 +113,7 @@ export default function TrackedPage() {
     <div className="wrap">
       <div className="topbar">
         <div className="brand">
-          <span className="dot" />
+          <a className="brand-home" href="/" title="Accueil">SCOUT</a>
           <h1>Suivis</h1>
         </div>
         <a className="btn ghost" href="/">← Retour</a>
@@ -146,7 +143,7 @@ export default function TrackedPage() {
             <table>
               <thead>
                 <tr>
-                  <th style={{ width: 28 }}></th>
+                  <th style={{ width: 40 }}></th>
                   <th>Bien</th>
                   <th className="num">Prix</th>
                   <th className="num">m²</th>
@@ -168,14 +165,14 @@ export default function TrackedPage() {
                       <tr>
                         <td style={{ textAlign: "center" }}>
                           {hasScore && (
-                            <span
-                              role="button"
-                              aria-label={isOpen ? "Replier" : "Détail"}
+                            <button
+                              className={`expand-btn ${isOpen ? "open" : ""}`}
+                              aria-label={isOpen ? "Replier le détail" : "Voir le détail du calcul"}
+                              title={isOpen ? "Replier" : "Détail du calcul"}
                               onClick={() => toggle(l.id)}
-                              style={{ cursor: "pointer", userSelect: "none", color: "var(--ink-soft)", display: "inline-block", transform: isOpen ? "rotate(90deg)" : "none", transition: "transform 0.12s ease" }}
                             >
                               ▸
-                            </span>
+                            </button>
                           )}
                         </td>
                         <td>
@@ -216,7 +213,7 @@ export default function TrackedPage() {
                                 <DetailRow
                                   label="Revente estimée"
                                   value={eur(l.resaleValue!)}
-                                  hint={l.resalePerM2 != null ? `${new Intl.NumberFormat("fr-FR").format(l.resalePerM2)} €/m² ${l.priceIsDefault ? "(défaut)" : "(zone)"}` : undefined}
+                                  hint={l.resalePerM2 != null ? `${Math.round(l.resalePerM2).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")} €/m² ${l.priceIsDefault ? "(défaut)" : "(zone)"}` : undefined}
                                 />
                                 <DetailRow label="Travaux TTC" value={eur(l.worksCost!)} />
                                 <DetailRow label="Frais acquisition" value={eur(l.acquisitionCost!)} />
@@ -230,7 +227,6 @@ export default function TrackedPage() {
                               </div>
                             </div>
 
-                            {/* S6 Phase 1 — historique de prix */}
                             <div style={{ marginTop: 16 }}>
                               <div className="muted" style={{ fontSize: "0.78rem", marginBottom: 8, fontWeight: 600 }}>
                                 Historique de prix

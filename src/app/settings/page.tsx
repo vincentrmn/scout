@@ -76,7 +76,7 @@ export default function SettingsPage() {
     <div className="wrap">
       <div className="topbar">
         <div className="brand">
-          <span className="dot" />
+          <a className="brand-home" href="/" title="Accueil">SCOUT</a>
           <h1>Prix de revente</h1>
         </div>
         <a className="btn ghost" href="/">← Retour</a>
@@ -130,7 +130,7 @@ export default function SettingsPage() {
         ))}
 
       {msg && (
-        <div className={msg.kind === "err" ? "error" : ""} style={msg.kind === "ok" ? { color: "var(--go)", fontWeight: 600 } : undefined}>
+        <div className={msg.kind === "err" ? "error" : ""} style={msg.kind === "ok" ? { color: "var(--green-ink)", fontWeight: 600 } : undefined}>
           {msg.text}
         </div>
       )}

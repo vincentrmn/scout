@@ -1,4 +1,4 @@
-"use client";
+use client";
 import { Fragment, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -19,7 +19,7 @@ type Run = {
 };
 
 const pct = (v: any) => (typeof v === "number" ? `${Math.round(v * 1000) / 10} %` : "—");
-const eur = (v: any) => (typeof v === "number" ? new Intl.NumberFormat("fr-FR").format(v) + " €" : "—");
+const eur = (v: any) => (typeof v === "number" ? Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " €" : "—");
 
 function summarizeZones(criteria: any): string {
   if (Array.isArray(criteria?.locCodes) && criteria.locCodes.length) {
@@ -46,6 +46,12 @@ function listZones(criteria: any): string {
 function summarizeCpe(criteria: any): string {
   const c = criteria?.cpeClasses;
   return Array.isArray(c) && c.length ? c.join("") : "toutes";
+}
+
+function typeLabel(t: any): string {
+  if (t === "house") return "Maison";
+  if (t === "both") return "Appartement + maison";
+  return "Appartement";
 }
 
 function HypRow({ label, value }: { label: string; value: string }) {
@@ -109,7 +115,7 @@ export default function Dashboard() {
     <div className="wrap">
       <div className="topbar">
         <div className="brand">
-          <span className="dot" />
+          <a className="brand-home" href="/" title="Accueil">SCOUT</a>
         </div>
         <div className="row" style={{ flex: "0 0 auto", alignItems: "center" }}>
           <a className="btn ghost" href="/nouveautes">✨ Nouveautés</a>
@@ -140,7 +146,7 @@ export default function Dashboard() {
                 <div>
                   <strong>{c.name}</strong>
                   <div className="muted" style={{ fontSize: "0.85rem", marginTop: 2 }}>
-                    {cr.propertyType} · ≤ {cr.surfaceMax ?? "—"} m² ·{" "}
+                    {typeLabel(cr.propertyType)} · ≤ {cr.surfaceMax ?? "—"} m² ·{" "}
                     CPE {summarizeCpe(cr)}
                     {cr.includeNew ? " · neuf inclus" : ""} · {summarizeZones(cr)}
                   </div>
@@ -188,7 +194,7 @@ export default function Dashboard() {
                       <div className="muted" style={{ fontSize: "0.74rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
                         Critères de recherche
                       </div>
-                      <HypRow label="Type de bien" value={cr.propertyType === "house" ? "Maison" : cr.propertyType === "both" ? "Appartement + maison" : "Appartement"} />
+                      <HypRow label="Type de bien" value={typeLabel(cr.propertyType)} />
                       <HypRow label="Zones" value={listZones(cr)} />
                       <HypRow label="Surface" value={`${cr.surfaceMin ?? "—"} → ${cr.surfaceMax ?? "—"} m²`} />
                       <HypRow label="Prix" value={`${cr.priceMin != null ? eur(cr.priceMin) : "—"} → ${cr.priceMax != null ? eur(cr.priceMax) : "—"}`} />
@@ -199,7 +205,7 @@ export default function Dashboard() {
                       <div className="muted" style={{ fontSize: "0.74rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
                         Hypothèses de scoring
                       </div>
-                      <HypRow label="Travaux" value={s.worksEurPerM2 != null ? `${new Intl.NumberFormat("fr-FR").format(s.worksEurPerM2)} €/m²` : "—"} />
+                      <HypRow label="Travaux" value={s.worksEurPerM2 != null ? `${Math.round(s.worksEurPerM2).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")} €/m²` : "—"} />
                       <HypRow label="TVA travaux" value={pct(s.worksVatPct)} />
                       <HypRow label="Frais acquisition" value={pct(s.notaryPct)} />
                       <HypRow label="Frais revente" value={pct(s.resaleAgencyPct)} />

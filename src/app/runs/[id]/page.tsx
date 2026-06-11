@@ -19,7 +19,7 @@ type Run = {
   error?: string; started_at: string; results: Scored[]; stats?: RunStats | null;
 };
 
-const eur = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n)) + " €";
+const eur = (n: number) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " €";
 const plur = (n: number) => (n > 1 ? "s" : "");
 
 // Affichage des verdicts (les valeurs stockées restent GO/NEGOCIER/PASS).
@@ -91,7 +91,7 @@ export default function RunPage({ params }: { params: { id: string } }) {
     <div className="wrap">
       <div className="topbar">
         <div className="brand">
-          <span className="dot" />
+          <a className="brand-home" href="/" title="Accueil">SCOUT</a>
           <h1>{run?.config_name || "Résultats"}</h1>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
@@ -170,25 +170,10 @@ export default function RunPage({ params }: { params: { id: string } }) {
                         <tr>
                           <td style={{ textAlign: "center" }}>
                             <button
+                              className={`expand-btn ${isOpen ? "open" : ""}`}
                               aria-label={isOpen ? "Replier le détail" : "Voir le détail du calcul"}
                               title={isOpen ? "Replier" : "Détail du calcul"}
                               onClick={() => toggle(r.id)}
-                              style={{
-                                background: "var(--paper-2)",
-                                border: "1px solid var(--line)",
-                                borderRadius: 8,
-                                width: 30,
-                                height: 30,
-                                cursor: "pointer",
-                                color: "var(--ink)",
-                                fontSize: "1rem",
-                                lineHeight: 1,
-                                display: "inline-flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                transform: isOpen ? "rotate(90deg)" : "none",
-                                transition: "transform 0.12s ease",
-                              }}
                             >
                               ▸
                             </button>
@@ -229,7 +214,7 @@ export default function RunPage({ params }: { params: { id: string } }) {
                                   <DetailRow
                                     label="Revente estimée"
                                     value={eur(r.resaleValue)}
-                                    hint={r.resalePerM2 != null ? `${new Intl.NumberFormat("fr-FR").format(r.resalePerM2)} €/m² ${r.priceIsDefault ? "(défaut)" : "(zone)"}` : undefined}
+                                    hint={r.resalePerM2 != null ? `${Math.round(r.resalePerM2).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")} €/m² ${r.priceIsDefault ? "(défaut)" : "(zone)"}` : undefined}
                                   />
                                   <DetailRow label="Travaux TTC" value={eur(r.worksCost)} />
                                   <DetailRow label="Frais acquisition" value={eur(r.acquisitionCost)} />

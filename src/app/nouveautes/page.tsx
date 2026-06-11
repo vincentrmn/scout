@@ -22,7 +22,7 @@ type Finding = {
 
 type Payload = { items: Finding[]; total: number; page: number; pageSize: number };
 
-const eur = (n: number) => new Intl.NumberFormat("fr-FR").format(Math.round(n)) + " €";
+const eur = (n: number) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " €";
 
 // Affichage des verdicts (valeurs stockées inchangées).
 const VERDICT_LABEL: Record<Finding["verdict"], string> = {
@@ -71,7 +71,7 @@ export default function NouveautesPage() {
     <div className="wrap">
       <div className="topbar">
         <div className="brand">
-          <span className="dot" />
+          <a className="brand-home" href="/" title="Accueil">SCOUT</a>
           <h1>Nouveautés</h1>
         </div>
         <a className="btn ghost" href="/">← Retour</a>

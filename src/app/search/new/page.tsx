@@ -116,7 +116,7 @@ export default function NewSearch() {
     <div className="wrap">
       <div className="topbar">
         <div className="brand">
-          <span className="dot" />
+          <a className="brand-home" href="/" title="Accueil">SCOUT</a>
           <h1>Nouvelle recherche</h1>
         </div>
         <a className="btn ghost" href="/">← Retour</a>
@@ -193,7 +193,8 @@ export default function NewSearch() {
         </div>
         <p className="muted" style={{ fontSize: "0.82rem", marginBottom: 0 }}>
           Le prix de revente au m² est calibré par quartier dans <a href="/settings">Prix de revente</a>.
-          Le verdict GO / NÉGOCIER / PASS et le prix d'achat max sont recalculés à chaque run.
+          Le verdict OK/Négocier/KO et le prix d'achat max sont recalculés à chaque run
+          (OK : marge ≥ cible · Négocier : ≥ moitié de la cible · KO : en dessous).
         </p>
       </div>
 
