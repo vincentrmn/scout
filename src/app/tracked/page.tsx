@@ -3,6 +3,8 @@ import { Fragment, useEffect, useState } from "react";
 import PhotoStrip from "@/components/PhotoStrip";
 import AnalysisPanel from "@/components/AnalysisPanel";
 import PropertyMap from "@/components/PropertyMap";
+import TrackedFilters from "@/components/TrackedFilters";
+import { EMPTY_FILTER, matchesFilter, activeFilterCount, type TrackedFilter } from "@/lib/trackedFilter";
 import { realAddress } from "@/lib/address";
 import type { ScoringSnapshot } from "@/lib/scoring";
 
@@ -75,6 +77,8 @@ export default function TrackedPage() {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [me, setMe] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [filter, setFilter] = useState<TrackedFilter>(EMPTY_FILTER);
+  const [showFilters, setShowFilters] = useState(false);
 
   // Identite legere : memorisee sur l'appareil.
   useEffect(() => {
@@ -224,11 +228,40 @@ export default function TrackedPage() {
         </p>
       )}
 
-      {listings !== null && listings.length > 0 && (
+      {listings !== null && listings.length > 0 && (() => {
+        const cpeOptions = Array.from(new Set(listings.map((l) => l.cpe).filter((c): c is string => !!c))).sort();
+        const communeOptions = Array.from(new Set(listings.map((l) => l.commune).filter((c): c is string => !!c))).sort();
+        const filtered = listings.filter((l) => matchesFilter(l, filter));
+        const nActive = activeFilterCount(filter);
+        return (
         <>
-          <p className="muted" style={{ fontSize: "0.82rem", marginBottom: 14 }}>
-            Marge calculée avec les paramètres par défaut et le prix de revente de chaque zone.
-          </p>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+            <button className="btn ghost" onClick={() => setShowFilters((v) => !v)}>
+              {showFilters ? "Masquer les filtres" : "Filtres"}{nActive > 0 ? ` · ${nActive}` : ""}
+            </button>
+            <span className="muted" style={{ fontSize: "0.82rem" }}>
+              {filtered.length} / {listings.length} bien{listings.length > 1 ? "s" : ""}
+              {nActive > 0 && (
+                <button className="btn ghost" style={{ marginLeft: 10, padding: "4px 10px" }} onClick={() => setFilter(EMPTY_FILTER)}>
+                  Réinitialiser
+                </button>
+              )}
+            </span>
+          </div>
+
+          {showFilters && (
+            <TrackedFilters
+              filter={filter}
+              onChange={setFilter}
+              cpeOptions={cpeOptions}
+              communeOptions={communeOptions}
+              statusOptions={STATUSES}
+            />
+          )}
+
+          {filtered.length === 0 ? (
+            <p className="empty">Aucun bien suivi ne correspond aux filtres.</p>
+          ) : (
           <div className="card" style={{ padding: 0, overflowX: "auto" }}>
             <table className="prop-table">
               <thead>
@@ -246,7 +279,7 @@ export default function TrackedPage() {
                 </tr>
               </thead>
               <tbody>
-                {listings.map((l) => {
+                {filtered.map((l) => {
                   const age = daysSince(l.last_seen);
                   const stale = age > 30;
                   const isOpen = !!open[l.id];
@@ -440,8 +473,10 @@ export default function TrackedPage() {
               </tbody>
             </table>
           </div>
+          )}
         </>
-      )}
+        );
+      })()}
     </div>
   );
 }
