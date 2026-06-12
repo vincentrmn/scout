@@ -11,7 +11,7 @@ type TrackedListing = {
   commune?: string;
   lat?: number | null;
   lng?: number | null;
-  coordsApprox?: boolean;
+  loc?: "exact" | "athome" | "quartier";
 };
 
 export default function CartePage() {
@@ -44,7 +44,7 @@ export default function CartePage() {
       price: l.price,
       marginPct: l.marginPct,
       url: l.url,
-      approx: l.coordsApprox,
+      loc: l.loc,
     }));
 
   return (

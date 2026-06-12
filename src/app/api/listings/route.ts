@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { pool, ensureSchema } from "@/lib/db";
 import { scoreListing, DEFAULT_SCORING } from "@/lib/scoring";
 import { getZonePriceMap, resolveResalePerM2, resolveCentroid } from "@/lib/zones";
+import { realAddress } from "@/lib/address";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -83,15 +84,20 @@ export async function GET() {
       const history = histMap.get(row.id) ?? [];
       const notes = notesMap.get(row.id) ?? [];
 
-      // S10 — coordonnées : précises (atHome) sinon centroïde du quartier (approx).
+      // S10 — statut de localisation :
+      //   exact    = atHome donne la rue (pin fiable)
+      //   athome   = coordonnées atHome mais sans rue (position non confirmée)
+      //   quartier = pas de coords atHome → centroïde du quartier (transitoire)
       let lat = typeof row.lat === "number" ? row.lat : null;
       let lng = typeof row.lng === "number" ? row.lng : null;
-      let coordsApprox = false;
+      let loc: "exact" | "athome" | "quartier";
       if (lat === null || lng === null) {
         [lat, lng] = resolveCentroid(row.commune);
-        coordsApprox = true;
+        loc = "quartier";
+      } else {
+        loc = realAddress(row.address) !== null ? "exact" : "athome";
       }
-      const geo = { lat, lng, coordsApprox };
+      const geo = { lat, lng, loc };
 
       // Prix de revente du quartier (sert de defaut et a qualifier la source).
       const zone = resolveResalePerM2(row.commune, priceMap);
