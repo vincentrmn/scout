@@ -37,6 +37,10 @@ export type Scored = Listing & {
   marginPct: number;        // marge brute / capital investi (en %, 1 decimale)
   maxBuyPrice: number;      // prix d'achat max pour atteindre la marge cible
   verdict: "GO" | "NEGOCIER" | "PASS";
+  // Hypotheses (%) reellement appliquees — pour les afficher dans le detail.
+  worksVatPct: number;
+  notaryPct: number;
+  resaleAgencyPct: number;
   // S5 — variation vs derniere vue : negatif = baisse (signal nego), null = premiere apparition.
   // Valeur initiale null ; ecrasee par /api/ingest apres lookup DB.
   priceDelta: number | null;
@@ -88,6 +92,9 @@ export function scoreListing(
     marginPct: Math.round(marginPct * 1000) / 10,
     maxBuyPrice: round(maxBuyPrice),
     verdict,
+    worksVatPct: p.worksVatPct,
+    notaryPct: p.notaryPct,
+    resaleAgencyPct: p.resaleAgencyPct,
     priceDelta: null, // ecrase par /api/ingest
   };
 }
