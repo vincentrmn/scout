@@ -242,7 +242,7 @@ export default function RunPage({ params }: { params: { id: string } }) {
                                   </div>
                                   <PropertyMap
                                     points={[{ id: r.id, lat: r.lat, lng: r.lng, title: r.title || r.id, price: r.price, marginPct: r.marginPct, url: r.url }]}
-                                    height={220}
+                                    height={340}
                                   />
                                 </div>
                               )}
