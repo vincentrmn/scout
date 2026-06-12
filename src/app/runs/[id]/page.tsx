@@ -242,7 +242,7 @@ export default function RunPage({ params }: { params: { id: string } }) {
                                     {realAddress(r.address) && <span style={{ fontWeight: 400, fontStyle: "italic", marginLeft: 6 }}>{realAddress(r.address)}</span>}
                                   </div>
                                   <PropertyMap
-                                    points={[{ id: r.id, lat: r.lat, lng: r.lng, title: r.title || r.id, price: r.price, marginPct: r.marginPct, url: r.url, approx: !realAddress(r.address) }]}
+                                    points={[{ id: r.id, lat: r.lat, lng: r.lng, title: r.title || r.id, price: r.price, marginPct: r.marginPct, url: r.url, loc: realAddress(r.address) ? "exact" : "athome" }]}
                                     height={340}
                                   />
                                 </div>

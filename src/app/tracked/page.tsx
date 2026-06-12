@@ -44,7 +44,7 @@ type TrackedListing = {
   lat?: number | null; // S10
   lng?: number | null;
   address?: string | null;
-  coordsApprox?: boolean;
+  loc?: "exact" | "athome" | "quartier";
 };
 
 const eur = (n: number) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " €";
@@ -338,12 +338,12 @@ export default function TrackedPage() {
                               <div style={{ marginTop: 16 }}>
                                 <div className="muted" style={{ fontSize: "0.78rem", marginBottom: 8, fontWeight: 600 }}>
                                   Localisation
-                                  {!l.coordsApprox && realAddress(l.address) && (
+                                  {l.loc === "exact" && realAddress(l.address) && (
                                     <span style={{ fontWeight: 400, fontStyle: "italic", marginLeft: 6 }}>{realAddress(l.address)}</span>
                                   )}
                                 </div>
                                 <PropertyMap
-                                  points={[{ id: l.id, lat: l.lat, lng: l.lng, title: l.title || l.id, price: l.price, marginPct: l.marginPct, url: l.url, approx: l.coordsApprox }]}
+                                  points={[{ id: l.id, lat: l.lat, lng: l.lng, title: l.title || l.id, price: l.price, marginPct: l.marginPct, url: l.url, loc: l.loc }]}
                                   height={340}
                                 />
                               </div>

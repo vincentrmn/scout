@@ -84,21 +84,20 @@ export async function GET() {
       const history = histMap.get(row.id) ?? [];
       const notes = notesMap.get(row.id) ?? [];
 
-      // S10 — coordonnées. atHome fournit TOUJOURS un lat/lng, mais sans rue
-      // c'est le centroïde du quartier (même pin pour tout le quartier). Donc :
-      // exact = on a au moins la rue ; sinon "quartier" (approx), même si atHome
-      // a renvoyé des coordonnées.
+      // S10 — statut de localisation :
+      //   exact    = atHome donne la rue (pin fiable)
+      //   athome   = coordonnées atHome mais sans rue (position non confirmée)
+      //   quartier = pas de coords atHome → centroïde du quartier (transitoire)
       let lat = typeof row.lat === "number" ? row.lat : null;
       let lng = typeof row.lng === "number" ? row.lng : null;
-      const hasStreet = realAddress(row.address) !== null;
-      let coordsApprox = false;
+      let loc: "exact" | "athome" | "quartier";
       if (lat === null || lng === null) {
         [lat, lng] = resolveCentroid(row.commune);
-        coordsApprox = true;
-      } else if (!hasStreet) {
-        coordsApprox = true; // pin = quartier (adresse non communiquée)
+        loc = "quartier";
+      } else {
+        loc = realAddress(row.address) !== null ? "exact" : "athome";
       }
-      const geo = { lat, lng, coordsApprox };
+      const geo = { lat, lng, loc };
 
       // Prix de revente du quartier (sert de defaut et a qualifier la source).
       const zone = resolveResalePerM2(row.commune, priceMap);

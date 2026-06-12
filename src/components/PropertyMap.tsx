@@ -4,9 +4,14 @@ import "leaflet/dist/leaflet.css";
 
 /**
  * S10 — Carte Leaflet (OpenStreetMap), sans clé API.
- * Couches Plan / Satellite, marqueurs colorés (bleu = adresse exacte, gris =
- * position approximative au quartier), et badge de statut toujours visible.
+ * Couches Plan / Satellite + statut de localisation par bien :
+ *   - exact    : atHome donne la rue → pin VERT « Adresse exacte »
+ *   - athome   : coordonnées atHome sans rue → pin ROUGE « Localisation AtHome »
+ *   - quartier : pas de coords atHome, centroïde du quartier (fallback transitoire)
+ *                → pin GRIS « Position approximative (quartier) »
  */
+
+export type LocStatus = "exact" | "athome" | "quartier";
 
 export type MapPoint = {
   id?: string;
@@ -16,13 +21,19 @@ export type MapPoint = {
   price?: number;
   marginPct?: number | null;
   url?: string;
-  approx?: boolean; // coordonnées = centroïde de quartier (pas précises)
+  loc?: LocStatus;
+};
+
+const LOC_STYLE: Record<LocStatus, { color: "green" | "red" | "grey"; label: string; bg: string; fg: string }> = {
+  exact: { color: "green", label: "📍 Adresse exacte", bg: "#e7f7f1", fg: "#0a8f6c" },
+  athome: { color: "red", label: "📍 Localisation AtHome", bg: "#fdecea", fg: "#c0392b" },
+  quartier: { color: "grey", label: "≈ Position approximative (quartier)", bg: "#fff7e6", fg: "#9a6b00" },
 };
 
 const eur = (n: number) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " €";
 
-// Petit décalage déterministe pour éviter que des points approximatifs (même
-// centroïde de quartier) se superposent exactement.
+// Petit décalage déterministe pour éviter que des points "quartier" (même
+// centroïde) se superposent exactement.
 function jitter(id: string | undefined, seedAdd: number): number {
   let h = 2166136261;
   const s = (id ?? "") + seedAdd;
@@ -46,7 +57,7 @@ export default function PropertyMap({ points, height = 240 }: { points: MapPoint
       const L = (await import("leaflet")).default;
       if (cancelled || !ref.current) return;
 
-      const mk = (color: "blue" | "grey") =>
+      const mk = (color: string) =>
         L.icon({
           iconUrl: `https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-${color}.png`,
           iconRetinaUrl: `https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-2x-${color}.png`,
@@ -56,8 +67,11 @@ export default function PropertyMap({ points, height = 240 }: { points: MapPoint
           popupAnchor: [1, -34],
           shadowSize: [41, 41],
         });
-      const iconExact = mk("blue");
-      const iconApprox = mk("grey");
+      const icons: Record<LocStatus, any> = {
+        exact: mk("green"),
+        athome: mk("red"),
+        quartier: mk("grey"),
+      };
 
       // Couches de fond commutables (Plan / Satellite), sans clé API.
       const plan = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -75,21 +89,19 @@ export default function PropertyMap({ points, height = 240 }: { points: MapPoint
       const valid = points.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
       const latlngs: [number, number][] = [];
       for (const p of valid) {
-        const lat = p.approx ? p.lat + jitter(p.id, 1) : p.lat;
-        const lng = p.approx ? p.lng + jitter(p.id, 2) : p.lng;
+        const loc: LocStatus = p.loc ?? "athome";
+        const style = LOC_STYLE[loc];
+        const lat = loc === "quartier" ? p.lat + jitter(p.id, 1) : p.lat;
+        const lng = loc === "quartier" ? p.lng + jitter(p.id, 2) : p.lng;
         latlngs.push([lat, lng]);
-        const m = L.marker([lat, lng], { icon: p.approx ? iconApprox : iconExact }).addTo(map);
+        const m = L.marker([lat, lng], { icon: icons[loc] }).addTo(map);
         const parts: string[] = [];
         if (p.title) parts.push(`<strong>${esc(p.title)}</strong>`);
         const line: string[] = [];
         if (typeof p.price === "number") line.push(eur(p.price));
         if (p.marginPct != null) line.push(`marge ${p.marginPct}%`);
         if (line.length) parts.push(line.join(" · "));
-        parts.push(
-          p.approx
-            ? `<span style="color:#b8860b">≈ Position approximative (quartier)</span>`
-            : `<span style="color:#0a8f6c">📍 Adresse exacte</span>`
-        );
+        parts.push(`<span style="color:${style.fg}">${style.label}</span>`);
         if (p.url) parts.push(`<a href="${esc(p.url)}" target="_blank" rel="noreferrer">Voir l'annonce ↗</a>`);
         if (parts.length) m.bindPopup(parts.join("<br>"));
       }
@@ -110,23 +122,26 @@ export default function PropertyMap({ points, height = 240 }: { points: MapPoint
     };
   }, [points]);
 
-  // Badge de statut toujours visible : exact / approximatif / mixte.
+  // Badge de statut toujours visible (en bas à gauche : pas de chevauchement
+  // avec le zoom en haut g. ni le sélecteur de couches en haut d.).
   const single = points.length === 1 ? points[0] : null;
-  const anyApprox = points.some((p) => p.approx);
   let badge: { text: string; bg: string; fg: string } | null = null;
   if (single) {
-    badge = single.approx
-      ? { text: "≈ Position approximative (quartier)", bg: "#fff7e6", fg: "#9a6b00" }
-      : { text: "📍 Adresse exacte", bg: "#e7f7f1", fg: "#0a8f6c" };
-  } else if (anyApprox) {
-    badge = { text: "📍 exact · ≈ approximatif (gris)", bg: "rgba(255,255,255,0.92)", fg: "#444" };
+    const s = LOC_STYLE[single.loc ?? "athome"];
+    badge = { text: s.label, bg: s.bg, fg: s.fg };
+  } else if (points.length > 1) {
+    const present = new Set(points.map((p) => p.loc ?? "athome"));
+    const legend = (["exact", "athome", "quartier"] as LocStatus[])
+      .filter((k) => present.has(k))
+      .map((k) => LOC_STYLE[k].label)
+      .join(" · ");
+    badge = { text: legend, bg: "rgba(255,255,255,0.92)", fg: "#444" };
   }
 
   return (
     <div style={{ position: "relative" }}>
       <div ref={ref} style={{ height, width: "100%", borderRadius: 10, overflow: "hidden", border: "1px solid var(--line)" }} />
       {badge && (
-        // En bas a gauche : ne chevauche ni les boutons de zoom (haut g.) ni le selecteur de couches (haut d.).
         <div
           style={{
             position: "absolute", bottom: 10, left: 10, zIndex: 1000,
