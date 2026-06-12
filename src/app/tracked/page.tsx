@@ -7,7 +7,7 @@ import TrackedFilters from "@/components/TrackedFilters";
 import PlaylistEditor from "@/components/PlaylistEditor";
 import { EMPTY_FILTER, matchesFilter, activeFilterCount, type TrackedFilter } from "@/lib/trackedFilter";
 import { isInPlaylist, toggleKind, type Playlist, type PlaylistRules } from "@/lib/playlist";
-import { exportExcel, exportPdf, type ExportRow } from "@/lib/exportTracked";
+import { exportExcel, exportPdf, type ExportBien } from "@/lib/exportTracked";
 import { realAddress } from "@/lib/address";
 import type { ScoringSnapshot } from "@/lib/scoring";
 
@@ -283,18 +283,41 @@ export default function TrackedPage() {
         const filtered = baseList.filter((l) => matchesFilter(l, filter));
         const nActive = activeFilterCount(filter);
         const exportTitle = selectedPlaylist ? `Suivis - ${selectedPlaylist.name}` : "Suivis";
-        const buildExportRows = (): ExportRow[] =>
-          filtered.map((l) => ({
-            bien: l.title || l.id,
-            commune: l.commune || "",
-            adresse: realAddress(l.address) || "",
-            prix: l.price,
-            surface: l.surface ?? "",
-            cpe: l.cpe || "",
-            marge: l.marginPct != null ? `${l.marginPct}%` : "",
-            statut: statusLabel(l.follow_status),
-            url: l.url,
-          }));
+        const buildExportRows = (): ExportBien[] =>
+          filtered.map((l) => {
+            const eff = l.analysisScoring ?? l.baselineScoring;
+            const gmaps =
+              typeof l.lat === "number" && typeof l.lng === "number"
+                ? `https://www.google.com/maps?q=${l.lat},${l.lng}`
+                : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${realAddress(l.address) || ""} ${l.commune || ""}`.trim())}`;
+            return {
+              bien: l.title || l.id,
+              commune: l.commune || "",
+              adresse: realAddress(l.address) || "",
+              statut: statusLabel(l.follow_status),
+              url: l.url,
+              gmaps,
+              price: l.price,
+              surface: l.surface ?? "",
+              cpe: l.cpe || "",
+              resalePerM2: l.resalePerM2,
+              resaleValue: l.resaleValue,
+              worksCost: l.worksCost,
+              acquisitionCost: l.acquisitionCost,
+              resaleCost: l.resaleCost,
+              totalInvested: l.totalInvested,
+              netProfit: l.netProfit,
+              marginPct: l.marginPct,
+              maxBuyPrice: l.maxBuyPrice,
+              worksVatPct: l.worksVatPct,
+              notaryPct: l.notaryPct,
+              resaleAgencyPct: l.resaleAgencyPct,
+              targetMarginPct: eff?.targetMarginPct ?? null,
+              lat: l.lat,
+              lng: l.lng,
+              photos: l.photos,
+            };
+          });
         return (
         <>
           {/* Playlists */}
