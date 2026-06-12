@@ -57,6 +57,7 @@ h3 { font-weight: 600; }
 @media (max-width: 760px) {
   .topbar { display: flex; flex-wrap: wrap; justify-content: space-between; }
   .page-title { width: 100%; order: 3; text-align: left; }
+  .page-title:empty { display: none; }
 }
 
 .brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
@@ -339,4 +340,43 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%);
   color: rgba(255, 255, 255, 0.85); font-size: 0.85rem;
   letter-spacing: 0.04em;
+}
+
+/* --------------------------------------------------------------------------
+   Responsive mobile (<= 640px)
+   -------------------------------------------------------------------------- */
+@media (max-width: 640px) {
+  html, body { font-size: 14px; }
+  h1 { font-size: 1.35rem; }
+  h2 { font-size: 1.12rem; }
+
+  .wrap { padding: 16px 13px 64px; }
+
+  /* Topbar compacte : logo + nav réduits, retour à la ligne propre */
+  .topbar { gap: 10px; margin-bottom: 16px; padding-bottom: 12px; }
+  .brand-home { font-size: 1.25rem; gap: 8px; }
+  .brand-home::before { width: 88px; height: 36px; }
+  .topbar-nav { gap: 6px; }
+
+  /* Boutons un peu plus compacts mais toujours confortables au doigt */
+  .btn { padding: 9px 13px; }
+
+  /* Listes : les contrôles passent sous le titre plutôt que de déborder */
+  .list-item { flex-wrap: wrap; align-items: flex-start; gap: 10px; padding: 12px 13px; }
+  .list-item > .row { width: 100%; }
+
+  /* Cartes & tableaux plus denses (les tableaux scrollent déjà en horizontal) */
+  .card { padding: 16px 14px; }
+  th, td { padding: 9px 8px; font-size: 0.85rem; }
+  .section-title { margin: 22px 0 12px; }
+
+  /* Photos un peu plus petites dans les dépliants */
+  .photo-strip img { width: 132px; height: 99px; }
+
+  /* Lightbox : marges réduites, flèches collées aux bords */
+  .lightbox { padding: 12px; }
+  .lightbox-close { top: 8px; right: 8px; }
+  .lightbox-nav { width: 44px; height: 44px; font-size: 1.9rem; }
+  .lightbox-nav.prev { left: 6px; }
+  .lightbox-nav.next { right: 6px; }
 }
