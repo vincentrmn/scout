@@ -1,5 +1,6 @@
 "use client";
 import { Fragment, useEffect, useState } from "react";
+import PhotoStrip from "@/components/PhotoStrip";
 
 type Snapshot = { price: number; seen_at: string };
 type Note = { id: number; author: string; kind: string; body: string; created_at: string };
@@ -53,26 +54,6 @@ const statusLabel = (key?: string) =>
 
 const fmtDateTime = (iso: string) =>
   new Date(iso).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-
-function PhotoStrip({ photos }: { photos?: string[] }) {
-  if (!photos || photos.length === 0) return null;
-  return (
-    <div className="photo-strip">
-      {photos.map((src, i) => (
-        <a key={i} href={src} target="_blank" rel="noreferrer" title="Ouvrir la photo">
-          <img
-            src={src}
-            alt={`Photo ${i + 1}`}
-            loading="lazy"
-            onError={(e) => {
-              (e.currentTarget.parentElement as HTMLElement).style.display = "none";
-            }}
-          />
-        </a>
-      ))}
-    </div>
-  );
-}
 
 function DetailRow({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
