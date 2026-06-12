@@ -71,6 +71,7 @@ export default function Dashboard() {
   const [openCfg, setOpenCfg] = useState<Record<number, boolean>>({});
   const [showRuns, setShowRuns] = useState(false);
   const [hasNewActivity, setHasNewActivity] = useState(false);
+  const [hasProposals, setHasProposals] = useState(false);
   const router = useRouter();
 
   // Badge "activité non vue" : derniere entree du journal de suivi vs ma derniere visite.
@@ -98,6 +99,13 @@ export default function Dashboard() {
     setRuns(Array.isArray(r) ? r : []);
   }
   useEffect(() => { load(); }, []);
+
+  // S12 — badge si des propositions de prix de revente sont en attente.
+  useEffect(() => {
+    fetch("/api/proposals").then((x) => x.json()).then((p) => {
+      if (Array.isArray(p) && p.length > 0) setHasProposals(true);
+    }).catch(() => {});
+  }, []);
 
   async function relancer(id: number) {
     setBusy(id);
@@ -146,7 +154,7 @@ export default function Dashboard() {
             links={[
               { href: "/nouveautes", label: "✨ Nouveautés" },
               { href: "/tracked", label: "★ Suivis", badge: hasNewActivity },
-              { href: "/settings", label: "⚙ Prix de revente" },
+              { href: "/settings", label: "⚙ Prix de revente", badge: hasProposals },
             ]}
           />
         </div>
