@@ -7,6 +7,7 @@ import TrackedFilters from "@/components/TrackedFilters";
 import PlaylistEditor from "@/components/PlaylistEditor";
 import { EMPTY_FILTER, matchesFilter, activeFilterCount, type TrackedFilter } from "@/lib/trackedFilter";
 import { isInPlaylist, toggleKind, type Playlist, type PlaylistRules } from "@/lib/playlist";
+import { exportExcel, exportPdf, type ExportRow } from "@/lib/exportTracked";
 import { realAddress } from "@/lib/address";
 import type { ScoringSnapshot } from "@/lib/scoring";
 
@@ -281,6 +282,19 @@ export default function TrackedPage() {
         const baseList = selectedPlaylist ? listings.filter((l) => isInPlaylist(l, selectedPlaylist)) : listings;
         const filtered = baseList.filter((l) => matchesFilter(l, filter));
         const nActive = activeFilterCount(filter);
+        const exportTitle = selectedPlaylist ? `Suivis - ${selectedPlaylist.name}` : "Suivis";
+        const buildExportRows = (): ExportRow[] =>
+          filtered.map((l) => ({
+            bien: l.title || l.id,
+            commune: l.commune || "",
+            adresse: realAddress(l.address) || "",
+            prix: l.price,
+            surface: l.surface ?? "",
+            cpe: l.cpe || "",
+            marge: l.marginPct != null ? `${l.marginPct}%` : "",
+            statut: statusLabel(l.follow_status),
+            url: l.url,
+          }));
         return (
         <>
           {/* Playlists */}
@@ -321,9 +335,17 @@ export default function TrackedPage() {
           )}
 
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
-            <button className="btn ghost" onClick={() => setShowFilters((v) => !v)}>
-              {showFilters ? "Masquer les filtres" : "Filtres"}{nActive > 0 ? ` · ${nActive}` : ""}
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <button className="btn ghost" onClick={() => setShowFilters((v) => !v)}>
+                {showFilters ? "Masquer les filtres" : "Filtres"}{nActive > 0 ? ` · ${nActive}` : ""}
+              </button>
+              <button className="btn ghost" disabled={filtered.length === 0} onClick={() => exportExcel(buildExportRows(), exportTitle)} title="Exporter en Excel">
+                ⬇ Excel
+              </button>
+              <button className="btn ghost" disabled={filtered.length === 0} onClick={() => exportPdf(buildExportRows(), exportTitle, exportTitle)} title="Exporter en PDF">
+                ⬇ PDF
+              </button>
+            </div>
             <span className="muted" style={{ fontSize: "0.82rem" }}>
               {filtered.length} / {baseList.length} bien{baseList.length > 1 ? "s" : ""}
               {nActive > 0 && (
