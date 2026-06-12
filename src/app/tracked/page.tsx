@@ -4,7 +4,9 @@ import PhotoStrip from "@/components/PhotoStrip";
 import AnalysisPanel from "@/components/AnalysisPanel";
 import PropertyMap from "@/components/PropertyMap";
 import TrackedFilters from "@/components/TrackedFilters";
+import PlaylistEditor from "@/components/PlaylistEditor";
 import { EMPTY_FILTER, matchesFilter, activeFilterCount, type TrackedFilter } from "@/lib/trackedFilter";
+import { isInPlaylist, toggleKind, type Playlist, type PlaylistRules } from "@/lib/playlist";
 import { realAddress } from "@/lib/address";
 import type { ScoringSnapshot } from "@/lib/scoring";
 
@@ -38,6 +40,7 @@ type TrackedListing = {
   worksVatPct?: number;
   notaryPct?: number;
   resaleAgencyPct?: number;
+  matchedConfigIds?: number[];             // S11 — recherches dont le bien matche les critères
   baselineScoring?: ScoringSnapshot;       // S9 — hypotheses de la recherche d'origine
   analysisScoring?: ScoringSnapshot | null; // S9 — essai de rentabilite persiste
   history?: Snapshot[];
@@ -79,6 +82,48 @@ export default function TrackedPage() {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [filter, setFilter] = useState<TrackedFilter>(EMPTY_FILTER);
   const [showFilters, setShowFilters] = useState(false);
+  // S11 — playlists
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [configs, setConfigs] = useState<{ id: number; name: string }[]>([]);
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState<number | null>(null);
+  const [editing, setEditing] = useState<"new" | number | null>(null);
+  const [plBusy, setPlBusy] = useState(false);
+
+  const loadPlaylists = async () => {
+    const r = await fetch("/api/playlists").then((x) => x.json()).catch(() => []);
+    setPlaylists(Array.isArray(r) ? r : []);
+  };
+  useEffect(() => {
+    loadPlaylists();
+    fetch("/api/configs").then((x) => x.json()).then((r) => {
+      if (Array.isArray(r)) setConfigs(r.map((c: any) => ({ id: c.id, name: c.name })));
+    }).catch(() => {});
+  }, []);
+
+  const savePlaylist = async (name: string, rules: PlaylistRules) => {
+    setPlBusy(true);
+    if (editing === "new") {
+      await fetch("/api/playlists", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, rules }) }).catch(() => {});
+    } else if (typeof editing === "number") {
+      await fetch(`/api/playlists?id=${editing}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, rules }) }).catch(() => {});
+    }
+    setPlBusy(false);
+    setEditing(null);
+    await loadPlaylists();
+  };
+
+  const deletePlaylist = async (id: number) => {
+    if (!confirm("Supprimer cette playlist ?")) return;
+    await fetch(`/api/playlists?id=${id}`, { method: "DELETE" }).catch(() => {});
+    if (selectedPlaylistId === id) setSelectedPlaylistId(null);
+    await loadPlaylists();
+  };
+
+  const toggleMembership = async (l: TrackedListing, p: Playlist) => {
+    const kind = toggleKind(l, p);
+    await fetch("/api/playlists/items", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ playlistId: p.id, listingId: l.id, kind }) }).catch(() => {});
+    await loadPlaylists();
+  };
 
   // Identite legere : memorisee sur l'appareil.
   useEffect(() => {
@@ -231,16 +276,56 @@ export default function TrackedPage() {
       {listings !== null && listings.length > 0 && (() => {
         const cpeOptions = Array.from(new Set(listings.map((l) => l.cpe).filter((c): c is string => !!c))).sort();
         const communeOptions = Array.from(new Set(listings.map((l) => l.commune).filter((c): c is string => !!c))).sort();
-        const filtered = listings.filter((l) => matchesFilter(l, filter));
+        const selectedPlaylist = selectedPlaylistId != null ? playlists.find((p) => p.id === selectedPlaylistId) ?? null : null;
+        const editingPlaylist = typeof editing === "number" ? playlists.find((p) => p.id === editing) ?? null : null;
+        const baseList = selectedPlaylist ? listings.filter((l) => isInPlaylist(l, selectedPlaylist)) : listings;
+        const filtered = baseList.filter((l) => matchesFilter(l, filter));
         const nActive = activeFilterCount(filter);
         return (
         <>
+          {/* Playlists */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+            <span className="muted" style={{ fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginRight: 2 }}>Playlists</span>
+            <button type="button" className={`chip ${selectedPlaylistId === null ? "on" : ""}`} onClick={() => setSelectedPlaylistId(null)}>
+              Tous ({listings.length})
+            </button>
+            {playlists.map((p) => {
+              const count = listings.filter((l) => isInPlaylist(l, p)).length;
+              return (
+                <button type="button" key={p.id} className={`chip ${selectedPlaylistId === p.id ? "on" : ""}`} onClick={() => setSelectedPlaylistId(p.id)}>
+                  {p.name} ({count})
+                </button>
+              );
+            })}
+            <button className="btn ghost" style={{ padding: "6px 12px" }} onClick={() => setEditing("new")}>+ Nouvelle</button>
+            {selectedPlaylist && (
+              <>
+                <button className="btn ghost" style={{ padding: "6px 12px" }} onClick={() => setEditing(selectedPlaylist.id)}>Modifier</button>
+                <button className="btn ghost" style={{ padding: "6px 12px" }} onClick={() => deletePlaylist(selectedPlaylist.id)}>Supprimer</button>
+              </>
+            )}
+          </div>
+
+          {editing !== null && (
+            <PlaylistEditor
+              key={String(editing)}
+              initialName={editingPlaylist?.name ?? ""}
+              initialRules={editingPlaylist?.rules}
+              cpeOptions={cpeOptions}
+              communeOptions={communeOptions}
+              configs={configs}
+              busy={plBusy}
+              onSave={savePlaylist}
+              onCancel={() => setEditing(null)}
+            />
+          )}
+
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
             <button className="btn ghost" onClick={() => setShowFilters((v) => !v)}>
               {showFilters ? "Masquer les filtres" : "Filtres"}{nActive > 0 ? ` · ${nActive}` : ""}
             </button>
             <span className="muted" style={{ fontSize: "0.82rem" }}>
-              {filtered.length} / {listings.length} bien{listings.length > 1 ? "s" : ""}
+              {filtered.length} / {baseList.length} bien{baseList.length > 1 ? "s" : ""}
               {nActive > 0 && (
                 <button className="btn ghost" style={{ marginLeft: 10, padding: "4px 10px" }} onClick={() => setFilter(EMPTY_FILTER)}>
                   Réinitialiser
@@ -358,6 +443,26 @@ export default function TrackedPage() {
                       {isOpen && (
                         <tr className="detail-row">
                           <td className="cell-detail" colSpan={10} style={{ background: "var(--paper-2)", padding: "12px 16px" }}>
+                            {playlists.length > 0 && (
+                              <div style={{ marginBottom: 12 }}>
+                                <div className="muted" style={{ fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
+                                  Playlists
+                                </div>
+                                <div className="chips">
+                                  {playlists.map((p) => (
+                                    <button
+                                      key={p.id}
+                                      type="button"
+                                      className={`chip ${isInPlaylist(l, p) ? "on" : ""}`}
+                                      title={isInPlaylist(l, p) ? "Retirer de la playlist" : "Ajouter à la playlist"}
+                                      onClick={() => toggleMembership(l, p)}
+                                    >
+                                      {isInPlaylist(l, p) ? "✓ " : "+ "}{p.name}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                             <PhotoStrip photos={l.photos} />
                             {hasScore && l.baselineScoring && (
                               <AnalysisPanel

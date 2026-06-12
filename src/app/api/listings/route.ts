@@ -1,11 +1,35 @@
 import { NextResponse } from "next/server";
 import { pool, ensureSchema } from "@/lib/db";
 import { scoreListing, DEFAULT_SCORING } from "@/lib/scoring";
-import { getZonePriceMap, resolveResalePerM2, resolveCentroid } from "@/lib/zones";
+import { getZonePriceMap, resolveResalePerM2, resolveCentroid, quartierSlug } from "@/lib/zones";
 import { realAddress } from "@/lib/address";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+// S11 — un bien satisfait-il les critères d'une recherche sauvegardée ?
+// (sert aux playlists « par recherche sauvegardée », côté serveur où le mapping
+// commune -> loc_code est fiable). Le type appart/maison n'est pas stocké sur le
+// bien : ce critère est donc ignoré.
+function matchCriteria(
+  criteria: any,
+  l: { surface?: number | null; price: number; cpe?: string | null },
+  listingLoc: string | null
+): boolean {
+  const c = criteria || {};
+  if (Array.isArray(c.locCodes) && c.locCodes.length) {
+    const cityWide = c.locCodes.some((x: string) => String(x).startsWith("L9-"));
+    if (!cityWide && (!listingLoc || !c.locCodes.includes(listingLoc))) return false;
+  }
+  if (c.surfaceMin != null && (l.surface == null || l.surface < c.surfaceMin)) return false;
+  if (c.surfaceMax != null && (l.surface == null || l.surface > c.surfaceMax)) return false;
+  if (c.priceMin != null && l.price < c.priceMin) return false;
+  if (c.priceMax != null && l.price > c.priceMax) return false;
+  if (Array.isArray(c.cpeClasses) && c.cpeClasses.length && c.cpeClasses.length < 9) {
+    if (!l.cpe || !c.cpeClasses.includes(l.cpe)) return false;
+  }
+  return true;
+}
 
 // GET /api/listings?tracked=1
 // Biens suivis, enrichis : re-scoring a la volee (DEFAULT_SCORING + prix zone,
@@ -80,6 +104,14 @@ export async function GET() {
     // (search_scoring), surchargees par un eventuel essai (analysis_scoring).
     // Defaut historique si aucune capture (biens suivis avant la S9).
     const priceMap = await getZonePriceMap();
+
+    // S11 — configs + mapping slug de quartier -> loc_code (pour matchedConfigIds).
+    const cfgRes = await pool.query<{ id: number; criteria: any }>(`SELECT id, criteria FROM configs`);
+    const configs = cfgRes.rows;
+    const zres = await pool.query<{ id: string; loc_code: string }>(`SELECT id, loc_code FROM zones`);
+    const slugToLoc = new Map<string, string>();
+    for (const z of zres.rows) slugToLoc.set(z.id, z.loc_code);
+
     const enriched = rows.map((row) => {
       const history = histMap.get(row.id) ?? [];
       const notes = notesMap.get(row.id) ?? [];
@@ -99,6 +131,13 @@ export async function GET() {
       }
       const geo = { lat, lng, loc };
 
+      // S11 — recherches sauvegardées dont ce bien satisfait les critères.
+      const slug = quartierSlug(row.commune);
+      const listingLoc = slug ? slugToLoc.get(slug) ?? null : null;
+      const matchedConfigIds = configs
+        .filter((cf) => matchCriteria(cf.criteria, row, listingLoc))
+        .map((cf) => cf.id);
+
       // Prix de revente du quartier (sert de defaut et a qualifier la source).
       const zone = resolveResalePerM2(row.commune, priceMap);
       // Hypotheses de la recherche : capturees, sinon defaut + prix de zone.
@@ -109,7 +148,7 @@ export async function GET() {
       const eff = analysis ?? baseline;
 
       if (!row.surface || row.surface <= 0) {
-        return { ...row, ...geo, marginPct: null, baselineScoring: baseline, analysisScoring: analysis, history, notes };
+        return { ...row, ...geo, matchedConfigIds, marginPct: null, baselineScoring: baseline, analysisScoring: analysis, history, notes };
       }
 
       const s = scoreListing(
@@ -136,6 +175,7 @@ export async function GET() {
       return {
         ...row,
         ...geo,
+        matchedConfigIds,
         resalePerM2: s.resalePerM2,
         priceIsDefault: zone.priceIsDefault,
         resaleValue: s.resaleValue,
