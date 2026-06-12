@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pool, ensureSchema } from "@/lib/db";
 import { scoreListing, type Listing } from "@/lib/scoring";
-import { getZonePriceMap, resolveResalePerM2 } from "@/lib/zones";
+import { getZonePriceMap, resolveResalePerM2, quartierSlug } from "@/lib/zones";
 import type { RunStats } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -34,19 +34,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  // Run lie : scoring de la config + flags (is_watch alimente les Nouveautes).
-  const runRow = await pool.query<{ config_id: number; config_name: string; is_watch: boolean }>(
-    `SELECT config_id, config_name, is_watch FROM runs WHERE id=$1`,
+  // Run lie : flags (is_watch alimente les Nouveautes, is_survey le releve marche).
+  const runRow = await pool.query<{ config_id: number; config_name: string; is_watch: boolean; is_survey: boolean }>(
+    `SELECT config_id, config_name, is_watch, is_survey FROM runs WHERE id=$1`,
     [runId]
   );
   if (!runRow.rows.length) return NextResponse.json({ error: "run introuvable" }, { status: 404 });
-  const { config_id, config_name } = runRow.rows[0];
-
-  const cfg = await pool.query(`SELECT scoring FROM configs WHERE id=$1`, [config_id]);
-  const scoring = cfg.rows[0]?.scoring;
-  if (!scoring) return NextResponse.json({ error: "scoring introuvable" }, { status: 404 });
-
-  const priceMap = await getZonePriceMap();
+  const { config_id, config_name, is_survey } = runRow.rows[0];
 
   const safe = Array.isArray(listings) ? listings : [];
   const filtered = safe.filter(
@@ -118,6 +112,37 @@ export async function POST(req: NextRequest) {
         pool.query(`INSERT INTO listing_snapshots (listing_id, price) VALUES ($1, $2)`, [l.id, l.price])
       )
   );
+
+  // S12 — Run de relevé de marché : on alimente market_samples, sans scoring ni
+  // Nouveautés. (Upsert listings + snapshots déjà faits ci-dessus.)
+  if (is_survey) {
+    await Promise.all(
+      filtered.map((l) => {
+        const slug = quartierSlug(l.commune);
+        const priceM2 =
+          typeof l.surface === "number" && l.surface > 0
+            ? Math.round((l.price / l.surface) * 100) / 100
+            : null;
+        const description = typeof l.description === "string" ? l.description.slice(0, 2000) : null;
+        return pool.query(
+          `INSERT INTO market_samples (listing_id, quartier_slug, price, surface, price_m2, cpe, description, url)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [l.id, slug, l.price, l.surface ?? null, priceM2, l.cpe ?? null, description, l.url ?? null]
+        );
+      })
+    );
+    await pool.query(
+      `UPDATE runs SET status='done', count=$2, stats=$3, finished_at=now() WHERE id=$1`,
+      [runId, filtered.length, statsJson]
+    );
+    return NextResponse.json({ ok: true, survey: filtered.length });
+  }
+
+  // --- Run normal : scoring de la config ---
+  const cfg = await pool.query(`SELECT scoring FROM configs WHERE id=$1`, [config_id]);
+  const scoring = cfg.rows[0]?.scoring;
+  if (!scoring) return NextResponse.json({ error: "scoring introuvable" }, { status: 404 });
+  const priceMap = await getZonePriceMap();
 
   // Score + delta
   const scored = filtered

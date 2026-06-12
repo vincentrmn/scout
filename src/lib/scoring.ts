@@ -31,6 +31,8 @@ export type Listing = {
   lat?: number | null;
   lng?: number | null;
   address?: string | null;
+  /** S12 — description de l'annonce (relevé de marché, runs is_survey). */
+  description?: string | null;
 };
 
 export type Scored = Listing & {

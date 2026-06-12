@@ -255,6 +255,61 @@ export function ensureSchema(): Promise<void> {
           PRIMARY KEY (playlist_id, listing_id)
         );
       `);
+
+      // -------------------------------------------------------------------
+      // S12 — Calculateur de prix de revente par quartier.
+      // -------------------------------------------------------------------
+      // Run de relevé de marché (alimente market_samples, pas les Nouveautés).
+      await pool.query(`ALTER TABLE runs ADD COLUMN IF NOT EXISTS is_survey BOOLEAN NOT NULL DEFAULT false;`);
+
+      // Comps terrain : annonces anciennes ville, classées par LLM (etat).
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS market_samples (
+          id              SERIAL PRIMARY KEY,
+          listing_id      TEXT,
+          quartier_slug   TEXT,
+          price           INTEGER,
+          surface         NUMERIC,
+          price_m2        NUMERIC,
+          cpe             TEXT,
+          description     TEXT,
+          etat            TEXT,
+          etat_confidence NUMERIC,
+          url             TEXT,
+          observed_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+      `);
+      await pool.query(
+        `CREATE INDEX IF NOT EXISTS market_samples_quartier_idx ON market_samples (quartier_slug, observed_at);`
+      );
+
+      // Données Observatoire de l'Habitat (actes notariés ville).
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS observatoire_data (
+          id                SERIAL PRIMARY KEY,
+          dataset           TEXT NOT NULL,
+          period            TEXT NOT NULL,
+          value_eur_m2      NUMERIC,
+          resource_modified TIMESTAMPTZ,
+          fetched_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+          UNIQUE (dataset, period)
+        );
+      `);
+
+      // Propositions de prix de revente par quartier (à valider à la main).
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS price_proposals (
+          id              SERIAL PRIMARY KEY,
+          quartier_slug   TEXT NOT NULL,
+          proposed_eur_m2 INTEGER,
+          current_eur_m2  INTEGER,
+          calc            JSONB,
+          status          TEXT NOT NULL DEFAULT 'pending',
+          created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+          decided_at      TIMESTAMPTZ
+        );
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS price_proposals_status_idx ON price_proposals (status);`);
     })();
   }
   return global._bbinvestSchema;
