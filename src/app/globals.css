@@ -275,6 +275,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 }
 .expand-btn:hover { border-color: var(--green); }
 .expand-btn.open { transform: rotate(90deg); }
+.expand-btn, .star-btn { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 
 /* --------------------------------------------------------------------------
    S8 — Photos d'annonce dans les depliants (taille fixe, toujours proportionnees)
@@ -400,17 +401,21 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   }
   /* Titre du bien : pleine largeur, en tête de carte */
   .prop-table .cell-main {
-    padding: 0 78px 8px 0; text-align: left; min-height: 0;
+    position: static;               /* ne pas recouvrir les boutons absolus -> tap fiable */
+    padding: 0 104px 8px 0; text-align: left; min-height: 0;
     border-bottom: 1px solid var(--line); margin-bottom: 6px;
   }
   .prop-table .cell-main::before { display: none; }
-  /* Boutons icônes (déplier / étoile) en haut à droite de la carte */
+  /* Boutons icônes (déplier / étoile) en haut à droite, au-dessus du reste,
+     avec une zone tactile confortable (>= 44px). */
   .prop-table .cell-expand, .prop-table .cell-star {
-    position: absolute; top: 10px; padding: 0; width: auto; min-height: 0;
+    position: absolute; top: 6px; padding: 0; width: auto; min-height: 0; z-index: 3;
   }
   .prop-table .cell-expand::before, .prop-table .cell-star::before { display: none; }
-  .prop-table .cell-expand { right: 12px; }
-  .prop-table .cell-star { right: 50px; }
+  .prop-table .cell-expand { right: 6px; }
+  .prop-table .cell-star { right: 58px; }
+  .prop-table .cell-expand .expand-btn { width: 44px; height: 44px; font-size: 1.25rem; }
+  .prop-table .cell-star .star-btn { font-size: 1.6rem; padding: 8px 7px; }
   /* Bouton d'action large (Suivre) : pleine largeur en bas de carte */
   .prop-table .cell-action { padding: 8px 0 0; text-align: left; min-height: 0; }
   .prop-table .cell-action::before { display: none; }
