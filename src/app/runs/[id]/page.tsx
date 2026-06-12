@@ -1,7 +1,7 @@
 "use client";
 import { Fragment, useEffect, useState } from "react";
 import PhotoStrip from "@/components/PhotoStrip";
-import PropertyMap from "@/components/PropertyMap";
+import PropertyMap, { realAddress } from "@/components/PropertyMap";
 
 type Scored = {
   id: string; url: string; title?: string; price: number; surface: number;
@@ -238,7 +238,7 @@ export default function RunPage({ params }: { params: { id: string } }) {
                                 <div style={{ marginTop: 14 }}>
                                   <div className="muted" style={{ fontSize: "0.78rem", marginBottom: 8, fontWeight: 600 }}>
                                     Localisation
-                                    {r.address && <span style={{ fontWeight: 400, fontStyle: "italic", marginLeft: 6 }}>{r.address}</span>}
+                                    {realAddress(r.address) && <span style={{ fontWeight: 400, fontStyle: "italic", marginLeft: 6 }}>{realAddress(r.address)}</span>}
                                   </div>
                                   <PropertyMap
                                     points={[{ id: r.id, lat: r.lat, lng: r.lng, title: r.title || r.id, price: r.price, marginPct: r.marginPct, url: r.url }]}
