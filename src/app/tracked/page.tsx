@@ -2,7 +2,7 @@
 import { Fragment, useEffect, useState } from "react";
 import PhotoStrip from "@/components/PhotoStrip";
 import AnalysisPanel from "@/components/AnalysisPanel";
-import PropertyMap from "@/components/PropertyMap";
+import PropertyMap, { realAddress } from "@/components/PropertyMap";
 import type { ScoringSnapshot } from "@/lib/scoring";
 
 type Snapshot = { price: number; seen_at: string };
@@ -337,8 +337,8 @@ export default function TrackedPage() {
                               <div style={{ marginTop: 16 }}>
                                 <div className="muted" style={{ fontSize: "0.78rem", marginBottom: 8, fontWeight: 600 }}>
                                   Localisation
-                                  {l.address && !l.coordsApprox && (
-                                    <span style={{ fontWeight: 400, fontStyle: "italic", marginLeft: 6 }}>{l.address}</span>
+                                  {!l.coordsApprox && realAddress(l.address) && (
+                                    <span style={{ fontWeight: 400, fontStyle: "italic", marginLeft: 6 }}>{realAddress(l.address)}</span>
                                   )}
                                 </div>
                                 <PropertyMap
