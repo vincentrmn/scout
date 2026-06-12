@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     [runId]
   );
   if (!runRow.rows.length) return NextResponse.json({ error: "run introuvable" }, { status: 404 });
-  const { config_id, config_name, is_watch } = runRow.rows[0];
+  const { config_id, config_name } = runRow.rows[0];
 
   const cfg = await pool.query(`SELECT scoring FROM configs WHERE id=$1`, [config_id]);
   const scoring = cfg.rows[0]?.scoring;
@@ -135,8 +135,11 @@ export async function POST(req: NextRequest) {
     [runId, scored.length, JSON.stringify(scored), statsJson]
   );
 
-  // S6 Phase 3 — Nouveautes : sur un run de veille, on enregistre des EVENEMENTS.
-  if (is_watch) {
+  // S6 Phase 3 — Nouveautes : EVENEMENTS GO/Negocier captures sur TOUT run
+  // (manuel ou veille). Le premier run qui voit une nouveaute/baisse cree
+  // l'evenement ; les suivants voient prev == prix => pas de doublon. Cale sur
+  // la meme couverture que les snapshots de prix (plus de signal absorbe).
+  {
     type FindingEvent = {
       listing_id: string;
       kind: "new" | "price_drop";
