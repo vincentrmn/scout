@@ -1,6 +1,7 @@
 "use client";
 import { Fragment, useEffect, useState } from "react";
 import PhotoStrip from "@/components/PhotoStrip";
+import PropertyMap from "@/components/PropertyMap";
 
 type Scored = {
   id: string; url: string; title?: string; price: number; surface: number;
@@ -12,6 +13,7 @@ type Scored = {
   worksVatPct?: number; notaryPct?: number; resaleAgencyPct?: number; // hypotheses affichees
   priceDelta?: number | null; // S5
   photos?: string[]; // S8
+  lat?: number | null; lng?: number | null; address?: string | null; // S10
 };
 type RunStats = {
   totalAtHome: number; pagesFetched: number; pagesPlanned: number;
@@ -232,6 +234,18 @@ export default function RunPage({ params }: { params: { id: string } }) {
                                   <DetailRow label="Prix d'achat max (cible)" value={eur(r.maxBuyPrice)} />
                                 </div>
                               </div>
+                              {typeof r.lat === "number" && typeof r.lng === "number" && (
+                                <div style={{ marginTop: 14 }}>
+                                  <div className="muted" style={{ fontSize: "0.78rem", marginBottom: 8, fontWeight: 600 }}>
+                                    Localisation
+                                    {r.address && <span style={{ fontWeight: 400, fontStyle: "italic", marginLeft: 6 }}>{r.address}</span>}
+                                  </div>
+                                  <PropertyMap
+                                    points={[{ id: r.id, lat: r.lat, lng: r.lng, title: r.title || r.id, price: r.price, marginPct: r.marginPct, url: r.url }]}
+                                    height={220}
+                                  />
+                                </div>
+                              )}
                             </td>
                           </tr>
                         )}

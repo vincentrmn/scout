@@ -160,6 +160,11 @@ export function ensureSchema(): Promise<void> {
       await pool.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS search_scoring JSONB;`);
       await pool.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS analysis_scoring JSONB;`);
 
+      // S10 — Géolocalisation (carte) : coordonnées précises atHome + adresse.
+      await pool.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;`);
+      await pool.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;`);
+      await pool.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS address TEXT;`);
+
       // S6 Phase 1 — Historique de prix
       await pool.query(`
         CREATE TABLE IF NOT EXISTS listing_snapshots (

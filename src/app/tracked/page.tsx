@@ -2,6 +2,7 @@
 import { Fragment, useEffect, useState } from "react";
 import PhotoStrip from "@/components/PhotoStrip";
 import AnalysisPanel from "@/components/AnalysisPanel";
+import PropertyMap from "@/components/PropertyMap";
 import type { ScoringSnapshot } from "@/lib/scoring";
 
 type Snapshot = { price: number; seen_at: string };
@@ -39,6 +40,10 @@ type TrackedListing = {
   history?: Snapshot[];
   notes?: Note[];
   photos?: string[]; // S8
+  lat?: number | null; // S10
+  lng?: number | null;
+  address?: string | null;
+  coordsApprox?: boolean;
 };
 
 const eur = (n: number) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " €";
@@ -202,6 +207,7 @@ export default function TrackedPage() {
               {PEOPLE.map((p) => <option key={p} value={p}>👤 {p}</option>)}
             </select>
           )}
+          <a className="btn ghost" href="/carte">🗺 Carte</a>
           <a className="btn ghost" href="/">← Retour</a>
         </div>
       </div>
@@ -345,6 +351,27 @@ export default function TrackedPage() {
                                 priceIsDefault={!!l.priceIsDefault}
                                 onSaved={load}
                               />
+                            )}
+
+                            {/* S10 — Localisation sur carte */}
+                            {typeof l.lat === "number" && typeof l.lng === "number" && (
+                              <div style={{ marginTop: 16 }}>
+                                <div className="muted" style={{ fontSize: "0.78rem", marginBottom: 8, fontWeight: 600 }}>
+                                  Localisation
+                                  {l.address && !l.coordsApprox && (
+                                    <span style={{ fontWeight: 400, fontStyle: "italic", marginLeft: 6 }}>{l.address}</span>
+                                  )}
+                                  {l.coordsApprox && (
+                                    <span style={{ fontWeight: 400, fontStyle: "italic", marginLeft: 6 }}>
+                                      approximative (quartier) — re-suivre le bien pour la position exacte
+                                    </span>
+                                  )}
+                                </div>
+                                <PropertyMap
+                                  points={[{ id: l.id, lat: l.lat, lng: l.lng, title: l.title || l.id, price: l.price, marginPct: l.marginPct, url: l.url, approx: l.coordsApprox }]}
+                                  height={220}
+                                />
+                              </div>
                             )}
 
                             {/* Historique de prix */}

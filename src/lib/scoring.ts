@@ -27,6 +27,10 @@ export type Listing = {
   rooms?: number;
   /** S8 — URLs des photos de l'annonce (extraites par n8n, max 6). */
   photos?: string[];
+  /** S10 — coordonnées précises atHome + adresse (carte). */
+  lat?: number | null;
+  lng?: number | null;
+  address?: string | null;
 };
 
 export type Scored = Listing & {
