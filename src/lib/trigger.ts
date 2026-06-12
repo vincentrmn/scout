@@ -90,6 +90,79 @@ export async function triggerRun(
   return { ok: true, runId };
 }
 
+/**
+ * S12 — Déclenche un run de relevé de marché (is_survey) : Lux-Ville entière,
+ * appartements anciens, CPE C–F, surface 25–75. Pas de config, pas de scoring.
+ * Le scraper renvoie les biens à /api/ingest qui alimente market_samples.
+ */
+export async function triggerSurveyRun(base: string): Promise<TriggerResult> {
+  await ensureSchema();
+
+  const run = await pool.query(
+    `INSERT INTO runs (config_id, config_name, status, is_survey)
+     VALUES (NULL, 'Relevé de marché', 'running', true) RETURNING id`
+  );
+  const runId = run.rows[0].id as number;
+
+  const webhook = process.env.N8N_WEBHOOK_URL;
+  if (!webhook) {
+    await pool.query(`UPDATE runs SET status='error', error=$2, finished_at=now() WHERE id=$1`, [
+      runId,
+      "N8N_WEBHOOK_URL non configure",
+    ]);
+    return { ok: false, status: 500, error: "N8N_WEBHOOK_URL non configure", runId };
+  }
+
+  const criteria: any = {
+    locCodes: ["L9-luxembourg"],
+    propertyType: "flat",
+    cpeClasses: ["C", "D", "E", "F"],
+    surfaceMin: 25,
+    surfaceMax: 75,
+    includeNew: false,
+    maxPages: 50,
+  };
+
+  // Enrichissement du qToken (obligatoire pour que loc= soit respecté).
+  const zonesRes = await pool.query<{ loc_code: string; q_code: string | null }>(
+    `SELECT loc_code, q_code FROM zones WHERE loc_code = ANY($1::text[])`,
+    [criteria.locCodes]
+  );
+  const qByLoc = new Map(zonesRes.rows.map((r) => [r.loc_code, r.q_code]));
+  const aligned = criteria.locCodes
+    .map((lc: string) => ({ locCode: lc, qCode: qByLoc.get(lc) ?? null }))
+    .filter((p: any) => p.qCode);
+  if (aligned.length === 0) {
+    await pool.query(`UPDATE runs SET status='error', error=$2, finished_at=now() WHERE id=$1`, [
+      runId,
+      "q_code Luxembourg-Ville introuvable en base.",
+    ]);
+    return { ok: false, status: 400, error: "q_code Luxembourg-Ville introuvable", runId };
+  }
+  criteria.locCodes = aligned.map((p: any) => p.locCode);
+  criteria.qTokens = aligned.map((p: any) => p.qCode);
+
+  const payload = {
+    runId,
+    criteria,
+    ingestUrl: `${base}/api/ingest`,
+    ingestSecret: process.env.INGEST_SECRET || "",
+  };
+
+  fetch(webhook, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  }).catch(async (e) => {
+    await pool.query(`UPDATE runs SET status='error', error=$2, finished_at=now() WHERE id=$1`, [
+      runId,
+      String(e),
+    ]);
+  });
+
+  return { ok: true, runId };
+}
+
 /** Construit l'origine publique de l'app depuis la requete (fallback PUBLIC_APP_URL). */
 export function resolveBase(req: Request): string {
   if (process.env.PUBLIC_APP_URL) return process.env.PUBLIC_APP_URL;
