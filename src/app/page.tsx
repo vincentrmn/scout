@@ -116,6 +116,12 @@ export default function Dashboard() {
     load();
   }
 
+  async function supprimerRun(id: number) {
+    if (!confirm("Supprimer cette recherche de l'historique ?")) return;
+    setRuns((prev) => prev.filter((r) => r.id !== id));
+    await fetch(`/api/runs?id=${id}`, { method: "DELETE" }).catch(() => {});
+  }
+
   async function toggleWatch(id: number, current: boolean) {
     setConfigs((prev) =>
       prev.map((c) => (c.id === id ? { ...c, watch_enabled: !current } : c))
@@ -275,6 +281,13 @@ export default function Dashboard() {
           <div className="row" style={{ flex: "0 0 auto", alignItems: "center" }}>
             <span className="badge">{r.status}</span>
             <span className="mono">{r.count} biens</span>
+            <button
+              className="btn ghost"
+              title="Supprimer cette recherche"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); supprimerRun(r.id); }}
+            >
+              ✕
+            </button>
           </div>
         </a>
       ))}

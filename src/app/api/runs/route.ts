@@ -18,3 +18,17 @@ export async function GET(req: NextRequest) {
   );
   return NextResponse.json(rows);
 }
+
+export async function DELETE(req: NextRequest) {
+  try {
+    await ensureSchema();
+    const id = req.nextUrl.searchParams.get("id");
+    if (!id) return NextResponse.json({ error: "id manquant" }, { status: 400 });
+    // findings.run_id est FK SET NULL : la suppression d'un run ne casse rien.
+    const { rowCount } = await pool.query(`DELETE FROM runs WHERE id = $1`, [id]);
+    if (!rowCount) return NextResponse.json({ error: "introuvable" }, { status: 404 });
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message ?? "erreur" }, { status: 500 });
+  }
+}
