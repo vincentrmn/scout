@@ -9,6 +9,7 @@ type Scored = {
   resaleValue: number; worksCost: number; acquisitionCost: number; resaleCost: number;
   totalInvested: number; netProfit: number; marginPct: number; maxBuyPrice: number;
   verdict: "GO" | "NEGOCIER" | "PASS";
+  worksVatPct?: number; notaryPct?: number; resaleAgencyPct?: number; // hypotheses affichees
   priceDelta?: number | null; // S5
   photos?: string[]; // S8
 };
@@ -23,6 +24,8 @@ type Run = {
 
 const eur = (n: number) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " €";
 const plur = (n: number) => (n > 1 ? "s" : "");
+// Fraction (0.17) -> "17 %". Sert a afficher les hypotheses dans le detail.
+const pct = (v?: number) => (typeof v === "number" ? `${Math.round(v * 1000) / 10} %` : null);
 
 // Affichage des verdicts (les valeurs stockées restent GO/NEGOCIER/PASS).
 const VERDICT_LABEL: Record<Scored["verdict"], string> = {
@@ -217,9 +220,9 @@ export default function RunPage({ params }: { params: { id: string } }) {
                                     value={eur(r.resaleValue)}
                                     hint={r.resalePerM2 != null ? `${Math.round(r.resalePerM2).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")} €/m² ${r.priceIsDefault ? "(défaut)" : "(zone)"}` : undefined}
                                   />
-                                  <DetailRow label="Travaux TTC" value={eur(r.worksCost)} />
-                                  <DetailRow label="Frais acquisition" value={eur(r.acquisitionCost)} />
-                                  <DetailRow label="Frais revente" value={eur(r.resaleCost)} />
+                                  <DetailRow label={`Travaux TTC${pct(r.worksVatPct) ? ` (TVA ${pct(r.worksVatPct)})` : ""}`} value={eur(r.worksCost)} />
+                                  <DetailRow label={`Frais acquisition${pct(r.notaryPct) ? ` (${pct(r.notaryPct)})` : ""}`} value={eur(r.acquisitionCost)} />
+                                  <DetailRow label={`Frais revente${pct(r.resaleAgencyPct) ? ` (${pct(r.resaleAgencyPct)})` : ""}`} value={eur(r.resaleCost)} />
                                 </div>
                                 <div>
                                   <DetailRow label="Capital investi" value={eur(r.totalInvested)} />

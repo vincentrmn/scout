@@ -29,12 +29,17 @@ type TrackedListing = {
   netProfit?: number;
   marginPct?: number | null;
   maxBuyPrice?: number;
+  worksVatPct?: number;
+  notaryPct?: number;
+  resaleAgencyPct?: number;
   history?: Snapshot[];
   notes?: Note[];
   photos?: string[]; // S8
 };
 
 const eur = (n: number) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " €";
+// Fraction (0.17) -> "17 %". Sert a afficher les hypotheses dans le detail.
+const pct = (v?: number) => (typeof v === "number" ? `${Math.round(v * 1000) / 10} %` : null);
 
 const daysSince = (iso: string) =>
   Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
@@ -351,9 +356,9 @@ export default function TrackedPage() {
                                     value={eur(l.resaleValue!)}
                                     hint={l.resalePerM2 != null ? `${Math.round(l.resalePerM2).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")} €/m² ${l.priceIsDefault ? "(défaut)" : "(zone)"}` : undefined}
                                   />
-                                  <DetailRow label="Travaux TTC" value={eur(l.worksCost!)} />
-                                  <DetailRow label="Frais acquisition" value={eur(l.acquisitionCost!)} />
-                                  <DetailRow label="Frais revente" value={eur(l.resaleCost!)} />
+                                  <DetailRow label={`Travaux TTC${pct(l.worksVatPct) ? ` (TVA ${pct(l.worksVatPct)})` : ""}`} value={eur(l.worksCost!)} />
+                                  <DetailRow label={`Frais acquisition${pct(l.notaryPct) ? ` (${pct(l.notaryPct)})` : ""}`} value={eur(l.acquisitionCost!)} />
+                                  <DetailRow label={`Frais revente${pct(l.resaleAgencyPct) ? ` (${pct(l.resaleAgencyPct)})` : ""}`} value={eur(l.resaleCost!)} />
                                 </div>
                                 <div>
                                   <DetailRow label="Capital investi" value={eur(l.totalInvested!)} />

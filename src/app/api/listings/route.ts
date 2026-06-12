@@ -110,6 +110,9 @@ export async function GET() {
         netProfit: s.netProfit,
         marginPct: s.marginPct,
         maxBuyPrice: s.maxBuyPrice,
+        worksVatPct: s.worksVatPct,
+        notaryPct: s.notaryPct,
+        resaleAgencyPct: s.resaleAgencyPct,
         history,
         notes,
       };
