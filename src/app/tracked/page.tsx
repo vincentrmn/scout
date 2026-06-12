@@ -183,7 +183,7 @@ export default function TrackedPage() {
               value={me}
               onChange={(e) => chooseMe(e.target.value)}
               title="Qui utilise l'app sur cet appareil"
-              style={{ width: "auto", padding: "8px 10px" }}
+              style={{ width: "auto" }}
             >
               {PEOPLE.map((p) => <option key={p} value={p}>👤 {p}</option>)}
             </select>
@@ -291,7 +291,7 @@ export default function TrackedPage() {
                             onChange={(e) => changeStatus(l.id, e.target.value)}
                             disabled={!me}
                             title={me ? "Changer le statut" : "Choisis d'abord qui tu es"}
-                            style={{ width: "auto", padding: "6px 8px", fontSize: "0.82rem" }}
+                            style={{ width: "auto", fontSize: "0.82rem" }}
                           >
                             {STATUSES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
                           </select>
