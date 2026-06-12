@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { pool, ensureSchema } from "@/lib/db";
 import { scoreListing, type Listing } from "@/lib/scoring";
 import { getZonePriceMap, resolveResalePerM2, quartierSlug } from "@/lib/zones";
+import { classifyEtat, hasAnthropicKey } from "@/lib/classify";
 import type { RunStats } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -116,25 +117,45 @@ export async function POST(req: NextRequest) {
   // S12 — Run de relevé de marché : on alimente market_samples, sans scoring ni
   // Nouveautés. (Upsert listings + snapshots déjà faits ci-dessus.)
   if (is_survey) {
-    await Promise.all(
-      filtered.map((l) => {
+    const samples = await Promise.all(
+      filtered.map(async (l) => {
         const slug = quartierSlug(l.commune);
         const priceM2 =
           typeof l.surface === "number" && l.surface > 0
             ? Math.round((l.price / l.surface) * 100) / 100
             : null;
         const description = typeof l.description === "string" ? l.description.slice(0, 2000) : null;
-        return pool.query(
+        const r = await pool.query(
           `INSERT INTO market_samples (listing_id, quartier_slug, price, surface, price_m2, cpe, description, url)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
           [l.id, slug, l.price, l.surface ?? null, priceM2, l.cpe ?? null, description, l.url ?? null]
         );
+        return { id: r.rows[0].id as number, description };
       })
     );
     await pool.query(
       `UPDATE runs SET status='done', count=$2, stats=$3, finished_at=now() WHERE id=$1`,
       [runId, filtered.length, statsJson]
     );
+
+    // S12 Phase 3 — classification LLM (séquentielle, ~5 req/s), best-effort :
+    // un échec laisse etat NULL sans bloquer. Ne tourne que si la clé est posée.
+    if (hasAnthropicKey()) {
+      const napms = (ms: number) => new Promise((r) => setTimeout(r, ms));
+      for (const s of samples) {
+        if (!s.description) continue;
+        try {
+          const c = await classifyEtat(s.description);
+          if (c) {
+            await pool.query(`UPDATE market_samples SET etat=$2, etat_confidence=$3 WHERE id=$1`, [s.id, c.etat, c.confidence]);
+          }
+        } catch (e) {
+          console.error("[classify]", s.id, e);
+        }
+        await napms(200);
+      }
+    }
+
     return NextResponse.json({ ok: true, survey: filtered.length });
   }
 
