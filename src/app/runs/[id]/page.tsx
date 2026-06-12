@@ -1,5 +1,6 @@
 "use client";
 import { Fragment, useEffect, useState } from "react";
+import PhotoStrip from "@/components/PhotoStrip";
 
 type Scored = {
   id: string; url: string; title?: string; price: number; surface: number;
@@ -29,26 +30,6 @@ const VERDICT_LABEL: Record<Scored["verdict"], string> = {
   NEGOCIER: "Négocier",
   PASS: "KO",
 };
-
-function PhotoStrip({ photos }: { photos?: string[] }) {
-  if (!photos || photos.length === 0) return null;
-  return (
-    <div className="photo-strip">
-      {photos.map((src, i) => (
-        <a key={i} href={src} target="_blank" rel="noreferrer" title="Ouvrir la photo">
-          <img
-            src={src}
-            alt={`Photo ${i + 1}`}
-            loading="lazy"
-            onError={(e) => {
-              (e.currentTarget.parentElement as HTMLElement).style.display = "none";
-            }}
-          />
-        </a>
-      ))}
-    </div>
-  );
-}
 
 function DetailRow({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
