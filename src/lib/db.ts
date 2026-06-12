@@ -120,6 +120,21 @@ export function ensureSchema(): Promise<void> {
         `UPDATE zones SET resale_eur_per_m2 = 11000 WHERE id = 'lux-ville' AND resale_eur_per_m2 IS NULL;`
       );
 
+      // S12 — Référence officielle prix AFFICHÉ €/m² par quartier (Observatoire
+      // de l'Habitat / VdL, base prix annoncés 2025). Sert de repli prioritaire
+      // et de cross-check dans les propositions. (Grund exclu : effectif * trop faible.)
+      await pool.query(`ALTER TABLE zones ADD COLUMN IF NOT EXISTS announced_eur_per_m2 NUMERIC;`);
+      await pool.query(`
+        UPDATE zones SET announced_eur_per_m2 = src.v FROM (VALUES
+          ('lux-ville', 12362), ('beggen', 10124), ('belair', 14273), ('bonnevoie', 10560),
+          ('cents', 8892), ('cessange', 10900), ('clausen', 9960), ('dommeldange', 9990),
+          ('eich', 11182), ('gare', 10829), ('gasperich', 12289), ('hamm', 10559),
+          ('hollerich', 11406), ('kirchberg', 11407), ('limpertsberg', 11977), ('merl', 11768),
+          ('muhlenbach', 11695), ('neudorf', 13601), ('pfaffenthal', 9665), ('pulvermuhle', 10296),
+          ('rollingergrund', 11014), ('centre-ville', 11743), ('weimerskirch', 10062)
+        ) AS src(id, v) WHERE zones.id = src.id;
+      `);
+
       // S5 — Listings
       await pool.query(`
         CREATE TABLE IF NOT EXISTS listings (

@@ -88,14 +88,15 @@ function compDetail(c: Comp) {
 }
 
 export type ProposalCalc = {
-  level: "quartier_renove" | "quartier_p75" | "cluster" | "ville";
-  basis: "renove" | "p75";
+  level: "quartier_renove" | "quartier_p75" | "vdl" | "cluster" | "ville";
+  basis: "renove" | "p75" | "reference";
   n_used: number;
   cible_eur_m2: number;
   percentiles: { p25: number | null; median: number | null; p75: number | null };
   decote: Decote;
   proposed_eur_m2: number;
   current_eur_m2: number | null;
+  vdl_ref: number | null; // référence affichée VdL 2025 du quartier (cross-check)
   formula: string;
   comps: ReturnType<typeof compDetail>[];
   generated_at: string;
@@ -106,7 +107,8 @@ export function computeQuartier(
   slug: string,
   comps: Comp[],
   decote: Decote,
-  current: number | null
+  current: number | null,
+  announcedRef: number | null
 ): { proposed: number; calc: ProposalCalc } | null {
   const here = comps.filter((c) => c.quartier_slug === slug);
 
@@ -114,11 +116,14 @@ export function computeQuartier(
   let r = applyRule(here);
   let used: Comp[];
   let cible: number;
-  let basis: "renove" | "p75";
+  let basis: "renove" | "p75" | "reference";
 
   if (r) {
     level = r.basis === "renove" ? "quartier_renove" : "quartier_p75";
     used = r.used; cible = r.value; basis = r.basis;
+  } else if (announcedRef != null && announcedRef > 0) {
+    // Repli prioritaire : référence officielle VdL du quartier (prix affiché).
+    level = "vdl"; used = []; cible = announcedRef; basis = "reference";
   } else {
     const cl = clusterOf(slug);
     const clusterComps = cl ? comps.filter((c) => cl.includes(c.quartier_slug)) : [];
@@ -138,7 +143,10 @@ export function computeQuartier(
   const percentiles = { p25: round(pct(usedM2, 25)), median: round(pct(usedM2, 50)), p75: round(pct(usedM2, 75)) };
 
   const fmtEur = (n: number) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-  const cibleLabel = basis === "renove" ? `médiane rénové (n=${used.length})` : `P75 (n=${used.length})`;
+  const cibleLabel =
+    basis === "renove" ? `médiane rénové (n=${used.length})`
+    : basis === "p75" ? `P75 (n=${used.length})`
+    : `référence VdL 2025`;
   const formula =
     `${cibleLabel} = ${fmtEur(cible)} €/m² × (1 − ${Math.round(decote.decote * 1000) / 10} %` +
     `${decote.source === "fallback" ? " fallback" : ""}) = ${fmtEur(cible * (1 - decote.decote))} → arrondi ${fmtEur(proposed)} €/m²`;
@@ -146,6 +154,7 @@ export function computeQuartier(
   const calc: ProposalCalc = {
     level, basis, n_used: used.length, cible_eur_m2: Math.round(cible),
     percentiles, decote, proposed_eur_m2: proposed, current_eur_m2: current,
+    vdl_ref: announcedRef,
     formula, comps: used.map(compDetail), generated_at: new Date().toISOString(),
   };
   return { proposed, calc };
@@ -160,9 +169,9 @@ export async function generateProposals(): Promise<{ created: number; total: num
   const decote = await getDecote();
   const comps = await loadComps();
 
-  // quartiers + prix courant (zones).
-  const { rows: zones } = await pool.query<{ id: string; resale: string | null }>(
-    `SELECT id, resale_eur_per_m2::float AS resale FROM zones WHERE parent_id IS NOT NULL`
+  // quartiers + prix courant + référence affichée VdL (zones).
+  const { rows: zones } = await pool.query<{ id: string; resale: string | null; announced: string | null }>(
+    `SELECT id, resale_eur_per_m2::float AS resale, announced_eur_per_m2::float AS announced FROM zones WHERE parent_id IS NOT NULL`
   );
   const cityRow = await pool.query<{ resale: string | null }>(
     `SELECT resale_eur_per_m2::float AS resale FROM zones WHERE parent_id IS NULL LIMIT 1`
@@ -172,7 +181,8 @@ export async function generateProposals(): Promise<{ created: number; total: num
   let created = 0;
   for (const z of zones) {
     const current = z.resale != null ? Number(z.resale) : cityDefault;
-    const res = computeQuartier(z.id, comps, decote, current);
+    const announcedRef = z.announced != null ? Number(z.announced) : null;
+    const res = computeQuartier(z.id, comps, decote, current, announcedRef);
     if (!res) continue;
     const diff = current > 0 ? Math.abs(res.proposed - current) / current : 1;
     if (diff < 0.02) continue;
