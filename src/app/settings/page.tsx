@@ -20,10 +20,11 @@ type Comp = {
   etat_confidence: number | null; observed_at: string;
 };
 type Calc = {
-  level: "quartier_renove" | "quartier_p75" | "cluster" | "ville";
-  basis: "renove" | "p75"; n_used: number; cible_eur_m2: number;
+  level: "quartier_renove" | "quartier_p75" | "vdl" | "cluster" | "ville";
+  basis: "renove" | "p75" | "reference"; n_used: number; cible_eur_m2: number;
   percentiles: { p25: number | null; median: number | null; p75: number | null };
   decote: Decote; proposed_eur_m2: number; current_eur_m2: number | null;
+  vdl_ref?: number | null;
   formula: string; comps: Comp[]; generated_at: string;
 };
 type Proposal = {
@@ -38,6 +39,7 @@ const fmtDate = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString
 const LEVEL_BADGE: Record<Calc["level"], { label: (n: number) => string; bg: string; fg: string }> = {
   quartier_renove: { label: (n) => `rénové n=${n}`, bg: "#e7f7f1", fg: "#0a8f6c" },
   quartier_p75: { label: (n) => `P75 n=${n}`, bg: "var(--paper-2)", fg: "var(--ink-soft)" },
+  vdl: { label: () => "VdL réf", bg: "#eef4fb", fg: "#2b6cb0" },
   cluster: { label: () => "cluster", bg: "#fff7e6", fg: "#9a6b00" },
   ville: { label: () => "ville", bg: "#fdecea", fg: "#c0392b" },
 };
@@ -60,6 +62,7 @@ function ProposalDetail({ c }: { c: Calc }) {
           <Row label="Affiché médian (ville)" value={d.affiche_median != null ? `${eur(d.affiche_median)}/m²` : "—"} />
           <Row label="Signé Observatoire" value={d.signe != null ? `${eur(d.signe)}/m²` : "—"} hint={d.period ? `T_${d.period}` : undefined} />
           <Row label="Données Observatoire" value={d.source === "fallback" ? `fallback 6,5 % — ${d.reason || ""}` : `maj ${fmtDate(d.fetched_at)}`} />
+          {c.vdl_ref != null && <Row label="Réf. VdL 2025 (quartier)" value={`${eur(c.vdl_ref)}/m²`} />}
         </div>
       </div>
 
