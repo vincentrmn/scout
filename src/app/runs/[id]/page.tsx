@@ -88,7 +88,8 @@ export default function RunPage({ params }: { params: { id: string } }) {
     await fetch("/api/listings/track", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, tracked: !isTracked }),
+      // runId = ce run : sert a capturer ses hypotheses de scoring sur le bien suivi.
+      body: JSON.stringify({ id, tracked: !isTracked, runId: Number(params.id) }),
     });
   };
 

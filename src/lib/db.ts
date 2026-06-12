@@ -51,6 +51,8 @@ export function ensureSchema(): Promise<void> {
       await pool.query(`ALTER TABLE runs ADD COLUMN IF NOT EXISTS stats JSONB;`);
       // S6 Phase 2 — run issu de la veille planifiee (=> source des Nouveautes).
       await pool.query(`ALTER TABLE runs ADD COLUMN IF NOT EXISTS is_watch BOOLEAN NOT NULL DEFAULT false;`);
+      // S9 — snapshot des hypotheses de scoring du run (pour capture au suivi).
+      await pool.query(`ALTER TABLE runs ADD COLUMN IF NOT EXISTS scoring JSONB;`);
       await pool.query(`CREATE INDEX IF NOT EXISTS runs_started_idx ON runs (started_at DESC);`);
 
       // Zones (S2/S4)
@@ -151,6 +153,12 @@ export function ensureSchema(): Promise<void> {
         `ALTER TABLE listings ADD COLUMN IF NOT EXISTS photos JSONB NOT NULL DEFAULT '[]';`
       );
       await pool.query(`UPDATE listings SET photos = '[]'::jsonb WHERE photos IS NULL;`);
+
+      // S9 — Suivis : hypotheses de la recherche d'origine (capturees au suivi)
+      // + essai de rentabilite persiste (override). Forme commune :
+      //   { worksEurPerM2, worksVatPct, notaryPct, resaleAgencyPct, targetMarginPct, resalePerM2 }
+      await pool.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS search_scoring JSONB;`);
+      await pool.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS analysis_scoring JSONB;`);
 
       // S6 Phase 1 — Historique de prix
       await pool.query(`

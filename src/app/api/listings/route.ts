@@ -19,7 +19,7 @@ export async function GET() {
         surface::float AS surface,
         commune, rooms, title, url, cpe,
         first_seen, last_seen, tracked, tracked_at,
-        follow_status, photos,
+        follow_status, photos, search_scoring, analysis_scoring,
         CASE
           WHEN prev_price IS NOT NULL AND prev_price <> price
           THEN price - prev_price
@@ -74,15 +74,27 @@ export async function GET() {
       }
     }
 
-    // Re-scoring config-independant : DEFAULT_SCORING + prix de revente par zone.
+    // S9 — Re-scoring base sur les hypotheses de la recherche d'origine
+    // (search_scoring), surchargees par un eventuel essai (analysis_scoring).
+    // Defaut historique si aucune capture (biens suivis avant la S9).
     const priceMap = await getZonePriceMap();
     const enriched = rows.map((row) => {
       const history = histMap.get(row.id) ?? [];
       const notes = notesMap.get(row.id) ?? [];
+
+      // Prix de revente du quartier (sert de defaut et a qualifier la source).
+      const zone = resolveResalePerM2(row.commune, priceMap);
+      // Hypotheses de la recherche : capturees, sinon defaut + prix de zone.
+      const baseline = row.search_scoring
+        ? { ...row.search_scoring }
+        : { ...DEFAULT_SCORING, resalePerM2: zone.resalePerM2 };
+      const analysis = row.analysis_scoring ?? null;
+      const eff = analysis ?? baseline;
+
       if (!row.surface || row.surface <= 0) {
-        return { ...row, marginPct: null, history, notes };
+        return { ...row, marginPct: null, baselineScoring: baseline, analysisScoring: analysis, history, notes };
       }
-      const { resalePerM2, priceIsDefault } = resolveResalePerM2(row.commune, priceMap);
+
       const s = scoreListing(
         {
           id: row.id,
@@ -94,14 +106,20 @@ export async function GET() {
           cpe: row.cpe,
           rooms: row.rooms,
         },
-        DEFAULT_SCORING,
-        resalePerM2,
-        priceIsDefault
+        {
+          worksEurPerM2: eff.worksEurPerM2,
+          worksVatPct: eff.worksVatPct,
+          notaryPct: eff.notaryPct,
+          resaleAgencyPct: eff.resaleAgencyPct,
+          targetMarginPct: eff.targetMarginPct,
+        },
+        eff.resalePerM2,
+        zone.priceIsDefault
       );
       return {
         ...row,
         resalePerM2: s.resalePerM2,
-        priceIsDefault: s.priceIsDefault,
+        priceIsDefault: zone.priceIsDefault,
         resaleValue: s.resaleValue,
         worksCost: s.worksCost,
         acquisitionCost: s.acquisitionCost,
@@ -113,6 +131,9 @@ export async function GET() {
         worksVatPct: s.worksVatPct,
         notaryPct: s.notaryPct,
         resaleAgencyPct: s.resaleAgencyPct,
+        // Jeux d'hypotheses pour le panneau d'analyse (essai de rentabilite).
+        baselineScoring: baseline,
+        analysisScoring: analysis,
         history,
         notes,
       };
