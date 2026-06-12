@@ -230,6 +230,31 @@ export function ensureSchema(): Promise<void> {
       await pool.query(
         `CREATE INDEX IF NOT EXISTS listing_notes_created_idx ON listing_notes (created_at DESC);`
       );
+
+      // -------------------------------------------------------------------
+      // S11 — Playlists de biens suivis.
+      //   rules JSONB = { cpe[], communes[], configIds[], match: 'all'|'any' }
+      //   -> remplissage AUTO des biens suivis qui matchent.
+      // playlist_items = surcharges MANUELLES :
+      //   kind='include' (épingler hors règles) | 'exclude' (retirer un match).
+      // -------------------------------------------------------------------
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS playlists (
+          id          SERIAL PRIMARY KEY,
+          name        TEXT NOT NULL,
+          rules       JSONB NOT NULL DEFAULT '{}',
+          created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+      `);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS playlist_items (
+          playlist_id INTEGER NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
+          listing_id  TEXT    NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
+          kind        TEXT    NOT NULL,
+          PRIMARY KEY (playlist_id, listing_id)
+        );
+      `);
     })();
   }
   return global._bbinvestSchema;
