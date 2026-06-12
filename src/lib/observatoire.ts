@@ -125,7 +125,7 @@ export async function getDecote(): Promise<Decote> {
     `SELECT price_m2 FROM market_samples
      WHERE observed_at > now() - interval '84 days'
        AND surface BETWEEN 30 AND 70
-       AND cpe IN ('C','D','E','F')
+       AND (cpe IS NULL OR cpe IN ('C','D','E','F'))
        AND price_m2 IS NOT NULL`
   );
   const aff = median(rows.map((r) => Number(r.price_m2)).filter((n) => Number.isFinite(n)));
