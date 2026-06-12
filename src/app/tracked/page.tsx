@@ -1,6 +1,8 @@
 "use client";
 import { Fragment, useEffect, useState } from "react";
 import PhotoStrip from "@/components/PhotoStrip";
+import AnalysisPanel from "@/components/AnalysisPanel";
+import type { ScoringSnapshot } from "@/lib/scoring";
 
 type Snapshot = { price: number; seen_at: string };
 type Note = { id: number; author: string; kind: string; body: string; created_at: string };
@@ -32,14 +34,14 @@ type TrackedListing = {
   worksVatPct?: number;
   notaryPct?: number;
   resaleAgencyPct?: number;
+  baselineScoring?: ScoringSnapshot;       // S9 — hypotheses de la recherche d'origine
+  analysisScoring?: ScoringSnapshot | null; // S9 — essai de rentabilite persiste
   history?: Snapshot[];
   notes?: Note[];
   photos?: string[]; // S8
 };
 
 const eur = (n: number) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " €";
-// Fraction (0.17) -> "17 %". Sert a afficher les hypotheses dans le detail.
-const pct = (v?: number) => (typeof v === "number" ? `${Math.round(v * 1000) / 10} %` : null);
 
 const daysSince = (iso: string) =>
   Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
@@ -59,18 +61,6 @@ const statusLabel = (key?: string) =>
 
 const fmtDateTime = (iso: string) =>
   new Date(iso).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-
-function DetailRow({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "5px 0", borderBottom: "1px solid var(--line)" }}>
-      <span className="muted" style={{ fontSize: "0.82rem" }}>
-        {label}
-        {hint && <span style={{ fontStyle: "italic", marginLeft: 6 }}>{hint}</span>}
-      </span>
-      <span className="mono" style={{ fontSize: "0.85rem" }}>{value}</span>
-    </div>
-  );
-}
 
 function Sparkline({ points }: { points: number[] }) {
   if (points.length < 2) return null;
@@ -347,26 +337,14 @@ export default function TrackedPage() {
                         <tr>
                           <td colSpan={9} style={{ background: "var(--paper-2)", padding: "12px 16px" }}>
                             <PhotoStrip photos={l.photos} />
-                            {hasScore && (
-                              <div className="grid cols-2" style={{ gap: "2px 32px" }}>
-                                <div>
-                                  <DetailRow label="Prix affiché" value={eur(l.price)} />
-                                  <DetailRow
-                                    label="Revente estimée"
-                                    value={eur(l.resaleValue!)}
-                                    hint={l.resalePerM2 != null ? `${Math.round(l.resalePerM2).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")} €/m² ${l.priceIsDefault ? "(défaut)" : "(zone)"}` : undefined}
-                                  />
-                                  <DetailRow label={`Travaux TTC${pct(l.worksVatPct) ? ` (TVA ${pct(l.worksVatPct)})` : ""}`} value={eur(l.worksCost!)} />
-                                  <DetailRow label={`Frais acquisition${pct(l.notaryPct) ? ` (${pct(l.notaryPct)})` : ""}`} value={eur(l.acquisitionCost!)} />
-                                  <DetailRow label={`Frais revente${pct(l.resaleAgencyPct) ? ` (${pct(l.resaleAgencyPct)})` : ""}`} value={eur(l.resaleCost!)} />
-                                </div>
-                                <div>
-                                  <DetailRow label="Capital investi" value={eur(l.totalInvested!)} />
-                                  <DetailRow label="Bénéfice brut" value={eur(l.netProfit!)} />
-                                  <DetailRow label="Marge brute" value={`${l.marginPct} %`} />
-                                  <DetailRow label="Prix d'achat max (cible)" value={eur(l.maxBuyPrice!)} />
-                                </div>
-                              </div>
+                            {hasScore && l.baselineScoring && (
+                              <AnalysisPanel
+                                listing={{ id: l.id, url: l.url, price: l.price, surface: l.surface, commune: l.commune, cpe: l.cpe }}
+                                baseline={l.baselineScoring}
+                                analysis={l.analysisScoring ?? null}
+                                priceIsDefault={!!l.priceIsDefault}
+                                onSaved={load}
+                              />
                             )}
 
                             {/* Historique de prix */}

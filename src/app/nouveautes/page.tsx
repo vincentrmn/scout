@@ -55,13 +55,14 @@ export default function NouveautesPage() {
 
   useEffect(() => { load(page); }, [page]);
 
-  const follow = async (id: string) => {
+  const follow = async (id: string, runId: number | null) => {
     if (tracked.has(id)) return;
     setTracked((prev) => new Set(prev).add(id));
     await fetch("/api/listings/track", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, tracked: true }),
+      // runId du finding : capture les hypotheses de la recherche d'origine.
+      body: JSON.stringify({ id, tracked: true, runId: runId ?? undefined }),
     }).catch(() => {});
   };
 
@@ -156,7 +157,7 @@ export default function NouveautesPage() {
                         {isTracked ? (
                           <span className="badge" style={{ color: "var(--green-ink)" }}>★ Suivi</span>
                         ) : (
-                          <button className="btn ghost" style={{ padding: "6px 12px" }} onClick={() => follow(f.listing_id)}>
+                          <button className="btn ghost" style={{ padding: "6px 12px" }} onClick={() => follow(f.listing_id, f.run_id)}>
                             ☆ Suivre
                           </button>
                         )}

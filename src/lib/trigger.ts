@@ -23,9 +23,9 @@ export async function triggerRun(
   const config = cfg.rows[0];
 
   const run = await pool.query(
-    `INSERT INTO runs (config_id, config_name, status, is_watch)
-     VALUES ($1, $2, 'running', $3) RETURNING id`,
-    [config.id, config.name, opts.isWatch ?? false]
+    `INSERT INTO runs (config_id, config_name, status, is_watch, scoring)
+     VALUES ($1, $2, 'running', $3, $4) RETURNING id`,
+    [config.id, config.name, opts.isWatch ?? false, JSON.stringify(config.scoring ?? null)]
   );
   const runId = run.rows[0].id as number;
 

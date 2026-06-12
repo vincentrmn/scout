@@ -12,6 +12,10 @@ export type ScoringParams = {
   targetMarginPct: number;  // marge brute cible sur capital investi, ex: 0.15
 };
 
+// S9 — Jeu d'hypotheses complet stocke par bien suivi : parametres de scoring
+// + prix de revente au m2 (capture de la recherche, ou modifie pour un essai).
+export type ScoringSnapshot = ScoringParams & { resalePerM2: number };
+
 export type Listing = {
   id: string;
   url: string;
