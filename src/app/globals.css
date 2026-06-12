@@ -379,4 +379,42 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   .lightbox-nav { width: 44px; height: 44px; font-size: 1.9rem; }
   .lightbox-nav.prev { left: 6px; }
   .lightbox-nav.next { right: 6px; }
+
+  /* Tableaux de biens -> cartes empilées (fini le scroll horizontal) */
+  .prop-table, .prop-table tbody, .prop-table tr, .prop-table td { display: block; width: 100%; }
+  .prop-table thead { display: none; }
+  .prop-table tr {
+    position: relative;
+    border: 1px solid var(--line); border-radius: 12px;
+    margin: 0 0 12px; padding: 12px 14px;
+  }
+  .prop-table tr.detail-row { border: none; padding: 0; margin: -8px 0 12px; }
+  .prop-table td {
+    border: none; position: relative;
+    padding: 6px 0 6px 42%; text-align: right; min-height: 1.7em;
+  }
+  .prop-table td::before {
+    content: attr(data-label);
+    position: absolute; left: 0; top: 6px; width: 38%;
+    text-align: left; color: var(--ink-soft); font-weight: 600; font-size: 0.78rem;
+  }
+  /* Titre du bien : pleine largeur, en tête de carte */
+  .prop-table .cell-main {
+    padding: 0 78px 8px 0; text-align: left; min-height: 0;
+    border-bottom: 1px solid var(--line); margin-bottom: 6px;
+  }
+  .prop-table .cell-main::before { display: none; }
+  /* Boutons icônes (déplier / étoile) en haut à droite de la carte */
+  .prop-table .cell-expand, .prop-table .cell-star {
+    position: absolute; top: 10px; padding: 0; width: auto; min-height: 0;
+  }
+  .prop-table .cell-expand::before, .prop-table .cell-star::before { display: none; }
+  .prop-table .cell-expand { right: 12px; }
+  .prop-table .cell-star { right: 50px; }
+  /* Bouton d'action large (Suivre) : pleine largeur en bas de carte */
+  .prop-table .cell-action { padding: 8px 0 0; text-align: left; min-height: 0; }
+  .prop-table .cell-action::before { display: none; }
+  /* Dépliant de détail : bloc pleine largeur, pas de mise en forme "valeur" */
+  .prop-table .cell-detail { text-align: left; min-height: 0; }
+  .prop-table .cell-detail::before { display: none; }
 }

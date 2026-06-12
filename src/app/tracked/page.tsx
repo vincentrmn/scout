@@ -229,7 +229,7 @@ export default function TrackedPage() {
             Marge calculée avec les paramètres par défaut et le prix de revente de chaque zone.
           </p>
           <div className="card" style={{ padding: 0, overflowX: "auto" }}>
-            <table>
+            <table className="prop-table">
               <thead>
                 <tr>
                   <th style={{ width: 40 }}></th>
@@ -256,7 +256,7 @@ export default function TrackedPage() {
                   return (
                     <Fragment key={l.id}>
                       <tr>
-                        <td style={{ textAlign: "center" }}>
+                        <td className="cell-expand" style={{ textAlign: "center" }}>
                           <button
                             className={`expand-btn ${isOpen ? "open" : ""}`}
                             aria-label={isOpen ? "Replier" : "Détail + suivi"}
@@ -266,13 +266,13 @@ export default function TrackedPage() {
                             ▸
                           </button>
                         </td>
-                        <td>
+                        <td className="cell-main">
                           <a href={l.url} target="_blank" rel="noreferrer">{l.title || l.id}</a>
                           {l.commune && (
                             <div className="muted" style={{ fontSize: "0.78rem" }}>{l.commune}</div>
                           )}
                         </td>
-                        <td className="num">
+                        <td className="num" data-label="Prix">
                           {eur(l.price)}
                           {l.price_delta != null && (
                             <span className={`delta-badge ${l.price_delta < 0 ? "down" : "up"}`}>
@@ -280,9 +280,9 @@ export default function TrackedPage() {
                             </span>
                           )}
                         </td>
-                        <td className="num">{l.surface}</td>
-                        <td className="num">{l.marginPct != null ? `${l.marginPct}%` : "—"}</td>
-                        <td>
+                        <td className="num" data-label="m²">{l.surface}</td>
+                        <td className="num" data-label="Marge">{l.marginPct != null ? `${l.marginPct}%` : "—"}</td>
+                        <td data-label="Statut">
                           <select
                             value={l.follow_status ?? "to_contact"}
                             onChange={(e) => changeStatus(l.id, e.target.value)}
@@ -293,7 +293,7 @@ export default function TrackedPage() {
                             {STATUSES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
                           </select>
                         </td>
-                        <td>
+                        <td data-label="Activité">
                           {realNotes.length > 0 ? (
                             <div style={{ maxWidth: 180 }}>
                               <span className="badge">💬 {realNotes.length}</span>
@@ -307,7 +307,7 @@ export default function TrackedPage() {
                             <span className="muted" style={{ fontSize: "0.78rem" }}>—</span>
                           )}
                         </td>
-                        <td>
+                        <td data-label="Dernière vue">
                           <span style={{ fontSize: "0.82rem" }} className={stale ? "muted" : ""}>
                             {age === 0 ? "Aujourd'hui" : age === 1 ? "Hier" : `Il y a ${age}j`}
                           </span>
@@ -315,13 +315,13 @@ export default function TrackedPage() {
                             <span className="badge" style={{ marginLeft: 8, fontSize: "0.68rem" }}>inactif ?</span>
                           )}
                         </td>
-                        <td style={{ textAlign: "center" }}>
+                        <td className="cell-star" style={{ textAlign: "center" }}>
                           <button className="star-btn tracked" onClick={() => untrack(l.id)} title="Retirer des suivis">★</button>
                         </td>
                       </tr>
                       {isOpen && (
-                        <tr>
-                          <td colSpan={9} style={{ background: "var(--paper-2)", padding: "12px 16px" }}>
+                        <tr className="detail-row">
+                          <td className="cell-detail" colSpan={9} style={{ background: "var(--paper-2)", padding: "12px 16px" }}>
                             <PhotoStrip photos={l.photos} />
                             {hasScore && l.baselineScoring && (
                               <AnalysisPanel

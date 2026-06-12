@@ -99,7 +99,7 @@ export default function NouveautesPage() {
             {data.total} événement{data.total > 1 ? "s" : ""} de veille · les plus récents d'abord.
           </p>
           <div className="card" style={{ padding: 0, overflowX: "auto" }}>
-            <table>
+            <table className="prop-table">
               <thead>
                 <tr>
                   <th>Bien</th>
@@ -119,13 +119,13 @@ export default function NouveautesPage() {
                   const drop = f.kind === "price_drop" && f.prev_price != null ? f.prev_price - f.price : null;
                   return (
                     <tr key={f.id}>
-                      <td>
+                      <td className="cell-main">
                         <a href={f.url} target="_blank" rel="noreferrer">{f.title || f.listing_id}</a>
                         <div className="muted" style={{ fontSize: "0.78rem" }}>
                           {f.commune || "—"}{f.config_name ? ` · ${f.config_name}` : ""}
                         </div>
                       </td>
-                      <td>
+                      <td data-label="Signal">
                         <span
                           style={{
                             display: "inline-block",
@@ -143,17 +143,17 @@ export default function NouveautesPage() {
                             : `↓ ${drop != null ? eur(drop) : "baisse"}`}
                         </span>
                       </td>
-                      <td className="num">{eur(f.price)}</td>
-                      <td className="num">{f.surface ?? "—"}</td>
-                      <td>{f.cpe ? <span className="badge">{f.cpe}</span> : "—"}</td>
-                      <td className="num">{f.margin_pct != null ? `${f.margin_pct}%` : "—"}</td>
-                      <td><span className={`verdict ${f.verdict}`}>{VERDICT_LABEL[f.verdict] ?? f.verdict}</span></td>
-                      <td>
+                      <td className="num" data-label="Prix">{eur(f.price)}</td>
+                      <td className="num" data-label="m²">{f.surface ?? "—"}</td>
+                      <td data-label="CPE">{f.cpe ? <span className="badge">{f.cpe}</span> : "—"}</td>
+                      <td className="num" data-label="Marge">{f.margin_pct != null ? `${f.margin_pct}%` : "—"}</td>
+                      <td data-label="Verdict"><span className={`verdict ${f.verdict}`}>{VERDICT_LABEL[f.verdict] ?? f.verdict}</span></td>
+                      <td data-label="Le">
                         <span style={{ fontSize: "0.82rem" }} className="muted">
                           {new Date(f.found_at).toLocaleDateString("fr-FR")}
                         </span>
                       </td>
-                      <td style={{ textAlign: "right" }}>
+                      <td className="cell-action" style={{ textAlign: "right" }}>
                         {isTracked ? (
                           <span className="badge" style={{ color: "var(--green-ink)" }}>★ Suivi</span>
                         ) : (
