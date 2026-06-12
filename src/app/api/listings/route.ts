@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { pool, ensureSchema } from "@/lib/db";
 import { scoreListing, DEFAULT_SCORING } from "@/lib/scoring";
-import { getZonePriceMap, resolveResalePerM2 } from "@/lib/zones";
+import { getZonePriceMap, resolveResalePerM2, resolveCentroid } from "@/lib/zones";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,6 +20,7 @@ export async function GET() {
         commune, rooms, title, url, cpe,
         first_seen, last_seen, tracked, tracked_at,
         follow_status, photos, search_scoring, analysis_scoring,
+        lat, lng, address,
         CASE
           WHEN prev_price IS NOT NULL AND prev_price <> price
           THEN price - prev_price
@@ -82,6 +83,16 @@ export async function GET() {
       const history = histMap.get(row.id) ?? [];
       const notes = notesMap.get(row.id) ?? [];
 
+      // S10 — coordonnées : précises (atHome) sinon centroïde du quartier (approx).
+      let lat = typeof row.lat === "number" ? row.lat : null;
+      let lng = typeof row.lng === "number" ? row.lng : null;
+      let coordsApprox = false;
+      if (lat === null || lng === null) {
+        [lat, lng] = resolveCentroid(row.commune);
+        coordsApprox = true;
+      }
+      const geo = { lat, lng, coordsApprox };
+
       // Prix de revente du quartier (sert de defaut et a qualifier la source).
       const zone = resolveResalePerM2(row.commune, priceMap);
       // Hypotheses de la recherche : capturees, sinon defaut + prix de zone.
@@ -92,7 +103,7 @@ export async function GET() {
       const eff = analysis ?? baseline;
 
       if (!row.surface || row.surface <= 0) {
-        return { ...row, marginPct: null, baselineScoring: baseline, analysisScoring: analysis, history, notes };
+        return { ...row, ...geo, marginPct: null, baselineScoring: baseline, analysisScoring: analysis, history, notes };
       }
 
       const s = scoreListing(
@@ -118,6 +129,7 @@ export async function GET() {
       );
       return {
         ...row,
+        ...geo,
         resalePerM2: s.resalePerM2,
         priceIsDefault: zone.priceIsDefault,
         resaleValue: s.resaleValue,

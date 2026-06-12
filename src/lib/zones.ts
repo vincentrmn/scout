@@ -90,6 +90,46 @@ export function resolveResalePerM2(
   return { resalePerM2: map.defaultPrice, priceIsDefault: true };
 }
 
+// S10 — Centroïdes approximatifs des quartiers de Luxembourg-Ville (lat, lng).
+// Sert de FALLBACK carte quand un bien n'a pas encore de coordonnées précises
+// (biens suivis avant le scraping géo). Clés = id de zone (= slug du quartier).
+export const QUARTIER_CENTROIDS: Record<string, [number, number]> = {
+  "lux-ville": [49.6116, 6.1319],
+  beggen: [49.6431, 6.1389],
+  belair: [49.6107, 6.1130],
+  bonnevoie: [49.5950, 6.1430],
+  "centre-ville": [49.6113, 6.1300],
+  cents: [49.6260, 6.1700],
+  cessange: [49.5870, 6.1100],
+  clausen: [49.6130, 6.1400],
+  dommeldange: [49.6390, 6.1480],
+  eich: [49.6350, 6.1340],
+  gare: [49.6000, 6.1340],
+  gasperich: [49.5790, 6.1280],
+  grund: [49.6100, 6.1370],
+  hamm: [49.6080, 6.1700],
+  hollerich: [49.5960, 6.1230],
+  kirchberg: [49.6280, 6.1600],
+  kohlenberg: [49.6050, 6.1050],
+  limpertsberg: [49.6230, 6.1180],
+  merl: [49.6020, 6.1080],
+  muhlenbach: [49.6310, 6.1250],
+  neudorf: [49.6230, 6.1700],
+  pfaffenthal: [49.6170, 6.1360],
+  pulvermuhle: [49.6160, 6.1520],
+  rollingergrund: [49.6230, 6.1100],
+  verlorenkost: [49.5990, 6.1380],
+  weimershof: [49.6280, 6.1660],
+  weimerskirch: [49.6330, 6.1480],
+};
+
+/** Centroïde du quartier d'un bien (fallback carte). Défaut = centre-ville. */
+export function resolveCentroid(commune: string | undefined): [number, number] {
+  const slug = quartierSlug(commune);
+  if (slug && QUARTIER_CENTROIDS[slug]) return QUARTIER_CENTROIDS[slug];
+  return QUARTIER_CENTROIDS["lux-ville"];
+}
+
 /** Met a jour les prix de revente par zone. `prices` : id -> €/m² ou null (herite). */
 export async function setZonePrices(prices: Record<string, number | null>): Promise<void> {
   await ensureSchema();
