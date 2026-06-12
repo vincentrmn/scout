@@ -340,15 +340,10 @@ export default function TrackedPage() {
                                   {l.address && !l.coordsApprox && (
                                     <span style={{ fontWeight: 400, fontStyle: "italic", marginLeft: 6 }}>{l.address}</span>
                                   )}
-                                  {l.coordsApprox && (
-                                    <span style={{ fontWeight: 400, fontStyle: "italic", marginLeft: 6 }}>
-                                      approximative (quartier) — re-suivre le bien pour la position exacte
-                                    </span>
-                                  )}
                                 </div>
                                 <PropertyMap
                                   points={[{ id: l.id, lat: l.lat, lng: l.lng, title: l.title || l.id, price: l.price, marginPct: l.marginPct, url: l.url, approx: l.coordsApprox }]}
-                                  height={220}
+                                  height={340}
                                 />
                               </div>
                             )}

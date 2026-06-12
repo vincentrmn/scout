@@ -4,7 +4,8 @@ import "leaflet/dist/leaflet.css";
 
 /**
  * S10 — Carte Leaflet (OpenStreetMap), sans clé API.
- * Affiche un ou plusieurs biens. Centrée/zoomée automatiquement sur les points.
+ * Couches Plan / Satellite, marqueurs colorés (bleu = adresse exacte, gris =
+ * position approximative au quartier), et badge de statut toujours visible.
  */
 
 export type MapPoint = {
@@ -45,21 +46,31 @@ export default function PropertyMap({ points, height = 240 }: { points: MapPoint
       const L = (await import("leaflet")).default;
       if (cancelled || !ref.current) return;
 
-      const icon = L.icon({
-        iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-        iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-        shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-        iconSize: [25, 41],
-        iconAnchor: [12, 41],
-        popupAnchor: [1, -34],
-        shadowSize: [41, 41],
-      });
+      const mk = (color: "blue" | "grey") =>
+        L.icon({
+          iconUrl: `https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-${color}.png`,
+          iconRetinaUrl: `https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-2x-${color}.png`,
+          shadowUrl: "https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-shadow.png",
+          iconSize: [25, 41],
+          iconAnchor: [12, 41],
+          popupAnchor: [1, -34],
+          shadowSize: [41, 41],
+        });
+      const iconExact = mk("blue");
+      const iconApprox = mk("grey");
 
-      map = L.map(ref.current, { scrollWheelZoom: false });
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      // Couches de fond commutables (Plan / Satellite), sans clé API.
+      const plan = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 19,
-        attribution: '&copy; OpenStreetMap',
-      }).addTo(map);
+        attribution: "&copy; OpenStreetMap",
+      });
+      const sat = L.tileLayer(
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        { maxZoom: 19, attribution: "Tiles &copy; Esri" }
+      );
+
+      map = L.map(ref.current, { scrollWheelZoom: false, layers: [plan] });
+      L.control.layers({ Plan: plan, Satellite: sat }, {}, { position: "topright" }).addTo(map);
 
       const valid = points.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
       const latlngs: [number, number][] = [];
@@ -67,14 +78,18 @@ export default function PropertyMap({ points, height = 240 }: { points: MapPoint
         const lat = p.approx ? p.lat + jitter(p.id, 1) : p.lat;
         const lng = p.approx ? p.lng + jitter(p.id, 2) : p.lng;
         latlngs.push([lat, lng]);
-        const m = L.marker([lat, lng], { icon }).addTo(map);
+        const m = L.marker([lat, lng], { icon: p.approx ? iconApprox : iconExact }).addTo(map);
         const parts: string[] = [];
         if (p.title) parts.push(`<strong>${esc(p.title)}</strong>`);
         const line: string[] = [];
         if (typeof p.price === "number") line.push(eur(p.price));
         if (p.marginPct != null) line.push(`marge ${p.marginPct}%`);
         if (line.length) parts.push(line.join(" · "));
-        if (p.approx) parts.push(`<em style="color:#777">Localisation approx. (quartier)</em>`);
+        parts.push(
+          p.approx
+            ? `<span style="color:#b8860b">≈ Position approximative (quartier)</span>`
+            : `<span style="color:#0a8f6c">📍 Adresse exacte</span>`
+        );
         if (p.url) parts.push(`<a href="${esc(p.url)}" target="_blank" rel="noreferrer">Voir l'annonce ↗</a>`);
         if (parts.length) m.bindPopup(parts.join("<br>"));
       }
@@ -95,5 +110,34 @@ export default function PropertyMap({ points, height = 240 }: { points: MapPoint
     };
   }, [points]);
 
-  return <div ref={ref} style={{ height, width: "100%", borderRadius: 10, overflow: "hidden", border: "1px solid var(--line)" }} />;
+  // Badge de statut toujours visible : exact / approximatif / mixte.
+  const single = points.length === 1 ? points[0] : null;
+  const anyApprox = points.some((p) => p.approx);
+  let badge: { text: string; bg: string; fg: string } | null = null;
+  if (single) {
+    badge = single.approx
+      ? { text: "≈ Position approximative (quartier)", bg: "#fff7e6", fg: "#9a6b00" }
+      : { text: "📍 Adresse exacte", bg: "#e7f7f1", fg: "#0a8f6c" };
+  } else if (anyApprox) {
+    badge = { text: "📍 exact · ≈ approximatif (gris)", bg: "rgba(255,255,255,0.92)", fg: "#444" };
+  }
+
+  return (
+    <div style={{ position: "relative" }}>
+      <div ref={ref} style={{ height, width: "100%", borderRadius: 10, overflow: "hidden", border: "1px solid var(--line)" }} />
+      {badge && (
+        <div
+          style={{
+            position: "absolute", top: 10, left: 10, zIndex: 1000,
+            background: badge.bg, color: badge.fg,
+            fontSize: "0.74rem", fontWeight: 700,
+            padding: "4px 9px", borderRadius: 999,
+            boxShadow: "0 1px 4px rgba(0,0,0,0.2)", pointerEvents: "none",
+          }}
+        >
+          {badge.text}
+        </div>
+      )}
+    </div>
+  );
 }
