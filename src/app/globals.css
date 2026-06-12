@@ -110,7 +110,8 @@ input:focus, select:focus { border-color: var(--green); background: #fff; }
 .chip {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 6px 11px; border-radius: 999px; cursor: pointer; user-select: none;
-  border: 1px solid var(--line); background: var(--paper-2); font-size: 0.85rem; font-weight: 500;
+  border: 1px solid var(--line); background: var(--paper-2);
+  font-family: inherit; font-size: 0.85rem; font-weight: 500;
   color: var(--ink-soft); transition: all 0.12s ease;
 }
 .chip.on { background: var(--ink); color: #fff; border-color: var(--ink); }
