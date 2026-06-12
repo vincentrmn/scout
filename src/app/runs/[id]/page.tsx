@@ -154,7 +154,7 @@ export default function RunPage({ params }: { params: { id: string } }) {
           {run.count === 0 && <p className="empty">Aucun bien ne correspond aux critères.</p>}
           {run.count > 0 && (
             <div className="card" style={{ padding: 0, overflowX: "auto" }}>
-              <table>
+              <table className="prop-table">
                 <thead>
                   <tr>
                     <th style={{ width: 40 }}></th>
@@ -175,7 +175,7 @@ export default function RunPage({ params }: { params: { id: string } }) {
                     return (
                       <Fragment key={r.id}>
                         <tr>
-                          <td style={{ textAlign: "center" }}>
+                          <td className="cell-expand" style={{ textAlign: "center" }}>
                             <button
                               className={`expand-btn ${isOpen ? "open" : ""}`}
                               aria-label={isOpen ? "Replier le détail" : "Voir le détail du calcul"}
@@ -185,11 +185,11 @@ export default function RunPage({ params }: { params: { id: string } }) {
                               ▸
                             </button>
                           </td>
-                          <td>
+                          <td className="cell-main">
                             <a href={r.url} target="_blank" rel="noreferrer">{r.title || r.id}</a>
                             {r.commune && <div className="muted" style={{ fontSize: "0.78rem" }}>{r.commune}</div>}
                           </td>
-                          <td className="num">
+                          <td className="num" data-label="Prix">
                             {eur(r.price)}
                             {r.priceDelta != null && (
                               <span className={`delta-badge ${r.priceDelta < 0 ? "down" : "up"}`}>
@@ -197,12 +197,12 @@ export default function RunPage({ params }: { params: { id: string } }) {
                               </span>
                             )}
                           </td>
-                          <td className="num">{r.surface}</td>
-                          <td><span className="badge">{r.cpe || "—"}</span></td>
-                          <td className="num">{eur(r.resaleValue)}</td>
-                          <td className="num">{r.marginPct}%</td>
-                          <td><span className={`verdict ${r.verdict}`}>{VERDICT_LABEL[r.verdict]}</span></td>
-                          <td style={{ textAlign: "center" }}>
+                          <td className="num" data-label="m²">{r.surface}</td>
+                          <td data-label="CPE"><span className="badge">{r.cpe || "—"}</span></td>
+                          <td className="num" data-label="Revente">{eur(r.resaleValue)}</td>
+                          <td className="num" data-label="Marge">{r.marginPct}%</td>
+                          <td data-label="Verdict"><span className={`verdict ${r.verdict}`}>{VERDICT_LABEL[r.verdict]}</span></td>
+                          <td className="cell-star" style={{ textAlign: "center" }}>
                             <button
                               className={`star-btn ${isTracked ? "tracked" : ""}`}
                               onClick={() => toggleTrack(r.id)}
@@ -213,8 +213,8 @@ export default function RunPage({ params }: { params: { id: string } }) {
                           </td>
                         </tr>
                         {isOpen && (
-                          <tr>
-                            <td colSpan={9} style={{ background: "var(--paper-2)", padding: "12px 16px" }}>
+                          <tr className="detail-row">
+                            <td className="cell-detail" colSpan={9} style={{ background: "var(--paper-2)", padding: "12px 16px" }}>
                               <PhotoStrip photos={r.photos} />
                               <div className="grid cols-2" style={{ gap: "2px 32px" }}>
                                 <div>
