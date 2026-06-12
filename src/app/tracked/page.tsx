@@ -2,7 +2,8 @@
 import { Fragment, useEffect, useState } from "react";
 import PhotoStrip from "@/components/PhotoStrip";
 import AnalysisPanel from "@/components/AnalysisPanel";
-import PropertyMap, { realAddress } from "@/components/PropertyMap";
+import PropertyMap from "@/components/PropertyMap";
+import { realAddress } from "@/lib/address";
 import type { ScoringSnapshot } from "@/lib/scoring";
 
 type Snapshot = { price: number; seen_at: string };

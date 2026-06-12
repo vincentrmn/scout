@@ -21,15 +21,6 @@ export type MapPoint = {
 
 const eur = (n: number) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " €";
 
-// atHome renvoie parfois "NC" / "" comme adresse alors que les coordonnées sont
-// précises. On ne montre l'adresse que si c'est une vraie voie.
-export function realAddress(a?: string | null): string | null {
-  const s = (a ?? "").trim();
-  if (!s) return null;
-  if (["nc", "n/a", "na", "n.c.", "-", "non communiqué", "non communique"].includes(s.toLowerCase())) return null;
-  return s;
-}
-
 // Petit décalage déterministe pour éviter que des points approximatifs (même
 // centroïde de quartier) se superposent exactement.
 function jitter(id: string | undefined, seedAdd: number): number {
@@ -97,7 +88,7 @@ export default function PropertyMap({ points, height = 240 }: { points: MapPoint
         parts.push(
           p.approx
             ? `<span style="color:#b8860b">≈ Position approximative (quartier)</span>`
-            : `<span style="color:#0a8f6c">📍 Position exacte</span>`
+            : `<span style="color:#0a8f6c">📍 Adresse exacte</span>`
         );
         if (p.url) parts.push(`<a href="${esc(p.url)}" target="_blank" rel="noreferrer">Voir l'annonce ↗</a>`);
         if (parts.length) m.bindPopup(parts.join("<br>"));
@@ -126,7 +117,7 @@ export default function PropertyMap({ points, height = 240 }: { points: MapPoint
   if (single) {
     badge = single.approx
       ? { text: "≈ Position approximative (quartier)", bg: "#fff7e6", fg: "#9a6b00" }
-      : { text: "📍 Position exacte", bg: "#e7f7f1", fg: "#0a8f6c" };
+      : { text: "📍 Adresse exacte", bg: "#e7f7f1", fg: "#0a8f6c" };
   } else if (anyApprox) {
     badge = { text: "📍 exact · ≈ approximatif (gris)", bg: "rgba(255,255,255,0.92)", fg: "#444" };
   }

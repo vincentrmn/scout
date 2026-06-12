@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { pool, ensureSchema } from "@/lib/db";
 import { scoreListing, DEFAULT_SCORING } from "@/lib/scoring";
 import { getZonePriceMap, resolveResalePerM2, resolveCentroid } from "@/lib/zones";
+import { realAddress } from "@/lib/address";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -83,13 +84,19 @@ export async function GET() {
       const history = histMap.get(row.id) ?? [];
       const notes = notesMap.get(row.id) ?? [];
 
-      // S10 — coordonnées : précises (atHome) sinon centroïde du quartier (approx).
+      // S10 — coordonnées. atHome fournit TOUJOURS un lat/lng, mais sans rue
+      // c'est le centroïde du quartier (même pin pour tout le quartier). Donc :
+      // exact = on a au moins la rue ; sinon "quartier" (approx), même si atHome
+      // a renvoyé des coordonnées.
       let lat = typeof row.lat === "number" ? row.lat : null;
       let lng = typeof row.lng === "number" ? row.lng : null;
+      const hasStreet = realAddress(row.address) !== null;
       let coordsApprox = false;
       if (lat === null || lng === null) {
         [lat, lng] = resolveCentroid(row.commune);
         coordsApprox = true;
+      } else if (!hasStreet) {
+        coordsApprox = true; // pin = quartier (adresse non communiquée)
       }
       const geo = { lat, lng, coordsApprox };
 
