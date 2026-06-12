@@ -155,7 +155,6 @@ export default function Dashboard() {
               />
             )}
           </a>
-          <a className="btn ghost" href="/carte">🗺 Carte</a>
           <a className="btn ghost" href="/settings">⚙ Prix de revente</a>
         </div>
       </div>

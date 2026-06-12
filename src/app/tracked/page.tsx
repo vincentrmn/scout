@@ -67,27 +67,6 @@ const statusLabel = (key?: string) =>
 const fmtDateTime = (iso: string) =>
   new Date(iso).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
-function Sparkline({ points }: { points: number[] }) {
-  if (points.length < 2) return null;
-  const w = 240, h = 44, pad = 4;
-  const min = Math.min(...points);
-  const max = Math.max(...points);
-  const range = max - min || 1;
-  const step = (w - pad * 2) / (points.length - 1);
-  const coords = points
-    .map((p, i) => {
-      const x = pad + i * step;
-      const y = pad + (h - pad * 2) * (1 - (p - min) / range);
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-  return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ display: "block" }}>
-      <polyline points={coords} fill="none" stroke="var(--green)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 export default function TrackedPage() {
   const [listings, setListings] = useState<TrackedListing[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -384,28 +363,25 @@ export default function TrackedPage() {
                                   Une seule observation pour l'instant — l'évolution apparaîtra dès qu'un prix change.
                                 </p>
                               ) : (
-                                <>
-                                  <Sparkline points={history.map((h) => h.price)} />
-                                  <div style={{ marginTop: 8, maxWidth: 360 }}>
-                                    {[...history].reverse().map((h, i, arr) => {
-                                      const older = arr[i + 1];
-                                      const d = older ? h.price - older.price : null;
-                                      return (
-                                        <div key={h.seen_at + i} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", padding: "3px 0" }}>
-                                          <span className="muted">{new Date(h.seen_at).toLocaleDateString("fr-FR")}</span>
-                                          <span className="mono">
-                                            {eur(h.price)}
-                                            {d != null && d !== 0 && (
-                                              <span style={{ marginLeft: 6, color: d < 0 ? "var(--green)" : "var(--ink-soft)" }}>
-                                                {d < 0 ? "↓" : "↑"} {eur(Math.abs(d))}
-                                              </span>
-                                            )}
-                                          </span>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </>
+                                <div style={{ marginTop: 8, maxWidth: 360 }}>
+                                  {[...history].reverse().map((h, i, arr) => {
+                                    const older = arr[i + 1];
+                                    const d = older ? h.price - older.price : null;
+                                    return (
+                                      <div key={h.seen_at + i} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", padding: "3px 0" }}>
+                                        <span className="muted">{new Date(h.seen_at).toLocaleDateString("fr-FR")}</span>
+                                        <span className="mono">
+                                          {eur(h.price)}
+                                          {d != null && d !== 0 && (
+                                            <span style={{ marginLeft: 6, color: d < 0 ? "var(--green)" : "var(--ink-soft)" }}>
+                                              {d < 0 ? "↓" : "↑"} {eur(Math.abs(d))}
+                                            </span>
+                                          )}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
                               )}
                             </div>
 
