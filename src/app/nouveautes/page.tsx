@@ -157,7 +157,7 @@ export default function NouveautesPage() {
                         {isTracked ? (
                           <span className="badge" style={{ color: "var(--green-ink)" }}>★ Suivi</span>
                         ) : (
-                          <button className="btn ghost" style={{ padding: "6px 12px" }} onClick={() => follow(f.listing_id, f.run_id)}>
+                          <button className="btn ghost" onClick={() => follow(f.listing_id, f.run_id)}>
                             ☆ Suivre
                           </button>
                         )}

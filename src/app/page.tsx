@@ -1,6 +1,7 @@
 "use client";
 import { Fragment, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import NavMenu from "@/components/NavMenu";
 
 type Cfg = {
   id: number;
@@ -141,21 +142,13 @@ export default function Dashboard() {
         <a className="brand-home" href="/" title="Accueil">SCOUT</a>
         <span className="page-title" />
         <div className="topbar-nav">
-          <a className="btn ghost" href="/nouveautes">✨ Nouveautés</a>
-          <a className="btn ghost" href="/tracked" style={{ position: "relative" }}>
-            ★ Suivis
-            {hasNewActivity && (
-              <span
-                title="Nouvelle activité sur les suivis"
-                style={{
-                  position: "absolute", top: -4, right: -4,
-                  width: 12, height: 12, borderRadius: "50%",
-                  background: "var(--green)", border: "2px solid #fff",
-                }}
-              />
-            )}
-          </a>
-          <a className="btn ghost" href="/settings">⚙ Prix de revente</a>
+          <NavMenu
+            links={[
+              { href: "/nouveautes", label: "✨ Nouveautés" },
+              { href: "/tracked", label: "★ Suivis", badge: hasNewActivity },
+              { href: "/settings", label: "⚙ Prix de revente" },
+            ]}
+          />
         </div>
       </div>
 

@@ -3,6 +3,8 @@ import { Fragment, useEffect, useState } from "react";
 import PhotoStrip from "@/components/PhotoStrip";
 import AnalysisPanel from "@/components/AnalysisPanel";
 import PropertyMap from "@/components/PropertyMap";
+import NavMenu from "@/components/NavMenu";
+import { ExcelIcon, PdfIcon } from "@/components/ExportIcons";
 import TrackedFilters from "@/components/TrackedFilters";
 import PlaylistEditor from "@/components/PlaylistEditor";
 import { EMPTY_FILTER, matchesFilter, activeFilterCount, type TrackedFilter } from "@/lib/trackedFilter";
@@ -89,6 +91,20 @@ export default function TrackedPage() {
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<number | null>(null);
   const [editing, setEditing] = useState<"new" | number | null>(null);
   const [plBusy, setPlBusy] = useState(false);
+  const [exporting, setExporting] = useState<null | "excel" | "pdf">(null);
+
+  const doExport = async (kind: "excel" | "pdf", rows: ExportBien[], title: string) => {
+    if (exporting) return;
+    setExporting(kind);
+    try {
+      if (kind === "excel") await exportExcel(rows, title);
+      else await exportPdf(rows, title, title);
+    } catch (e) {
+      console.error("[export]", e);
+    } finally {
+      setExporting(null);
+    }
+  };
 
   const loadPlaylists = async () => {
     const r = await fetch("/api/playlists").then((x) => x.json()).catch(() => []);
@@ -233,13 +249,12 @@ export default function TrackedPage() {
               value={me}
               onChange={(e) => chooseMe(e.target.value)}
               title="Qui utilise l'app sur cet appareil"
-              style={{ width: "auto" }}
+              style={{ width: "auto", padding: "8px 10px" }}
             >
               {PEOPLE.map((p) => <option key={p} value={p}>👤 {p}</option>)}
             </select>
           )}
-          <a className="btn ghost" href="/carte">🗺 Carte</a>
-          <a className="btn ghost" href="/">← Retour</a>
+          <NavMenu links={[{ href: "/carte", label: "🗺 Carte" }, { href: "/", label: "← Retour" }]} />
         </div>
       </div>
 
@@ -334,11 +349,11 @@ export default function TrackedPage() {
                 </button>
               );
             })}
-            <button className="btn ghost" style={{ padding: "6px 12px" }} onClick={() => setEditing("new")}>+ Nouvelle</button>
+            <button className="btn ghost" onClick={() => setEditing("new")}>+ Nouvelle</button>
             {selectedPlaylist && (
               <>
-                <button className="btn ghost" style={{ padding: "6px 12px" }} onClick={() => setEditing(selectedPlaylist.id)}>Modifier</button>
-                <button className="btn ghost" style={{ padding: "6px 12px" }} onClick={() => deletePlaylist(selectedPlaylist.id)}>Supprimer</button>
+                <button className="btn ghost" onClick={() => setEditing(selectedPlaylist.id)}>Modifier</button>
+                <button className="btn ghost" onClick={() => deletePlaylist(selectedPlaylist.id)}>Supprimer</button>
               </>
             )}
           </div>
@@ -362,22 +377,32 @@ export default function TrackedPage() {
               <button className="btn ghost" onClick={() => setShowFilters((v) => !v)}>
                 {showFilters ? "Masquer les filtres" : "Filtres"}{nActive > 0 ? ` · ${nActive}` : ""}
               </button>
-              <button className="btn ghost" disabled={filtered.length === 0} onClick={() => exportExcel(buildExportRows(), exportTitle)} title="Exporter en Excel">
-                ⬇ Excel
+              <button className="btn ghost" disabled={filtered.length === 0 || exporting !== null} onClick={() => doExport("excel", buildExportRows(), exportTitle)} title="Exporter en Excel">
+                <ExcelIcon /> Excel
               </button>
-              <button className="btn ghost" disabled={filtered.length === 0} onClick={() => exportPdf(buildExportRows(), exportTitle, exportTitle)} title="Exporter en PDF">
-                ⬇ PDF
+              <button className="btn ghost" disabled={filtered.length === 0 || exporting !== null} onClick={() => doExport("pdf", buildExportRows(), exportTitle)} title="Exporter en PDF">
+                <PdfIcon /> PDF
               </button>
             </div>
             <span className="muted" style={{ fontSize: "0.82rem" }}>
               {filtered.length} / {baseList.length} bien{baseList.length > 1 ? "s" : ""}
               {nActive > 0 && (
-                <button className="btn ghost" style={{ marginLeft: 10, padding: "4px 10px" }} onClick={() => setFilter(EMPTY_FILTER)}>
+                <button className="btn ghost" style={{ marginLeft: 10 }} onClick={() => setFilter(EMPTY_FILTER)}>
                   Réinitialiser
                 </button>
               )}
             </span>
           </div>
+
+          {exporting && (
+            <div style={{ marginBottom: 14 }}>
+              <div className="muted" style={{ fontSize: "0.78rem", marginBottom: 5 }}>
+                Export {exporting === "pdf" ? "PDF" : "Excel"} en cours…
+                {exporting === "pdf" ? " (chargement des photos et des cartes)" : ""}
+              </div>
+              <div className="progress-bar"><span /></div>
+            </div>
+          )}
 
           {showFilters && (
             <TrackedFilters
@@ -454,7 +479,7 @@ export default function TrackedPage() {
                             onChange={(e) => changeStatus(l.id, e.target.value)}
                             disabled={!me}
                             title={me ? "Changer le statut" : "Choisis d'abord qui tu es"}
-                            style={{ width: "auto", fontSize: "0.82rem" }}
+                            style={{ width: "auto", padding: "6px 8px", fontSize: "0.82rem" }}
                           >
                             {STATUSES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
                           </select>
