@@ -236,6 +236,7 @@ export default function TrackedPage() {
                   <th>Bien</th>
                   <th className="num">Prix</th>
                   <th className="num">m²</th>
+                  <th>CPE</th>
                   <th className="num">Marge</th>
                   <th>Statut</th>
                   <th>Activité</th>
@@ -281,6 +282,7 @@ export default function TrackedPage() {
                           )}
                         </td>
                         <td className="num" data-label="m²">{l.surface}</td>
+                        <td data-label="CPE"><span className="badge">{l.cpe || "—"}</span></td>
                         <td className="num" data-label="Marge">{l.marginPct != null ? `${l.marginPct}%` : "—"}</td>
                         <td data-label="Statut">
                           <select
@@ -321,7 +323,7 @@ export default function TrackedPage() {
                       </tr>
                       {isOpen && (
                         <tr className="detail-row">
-                          <td className="cell-detail" colSpan={9} style={{ background: "var(--paper-2)", padding: "12px 16px" }}>
+                          <td className="cell-detail" colSpan={10} style={{ background: "var(--paper-2)", padding: "12px 16px" }}>
                             <PhotoStrip photos={l.photos} />
                             {hasScore && l.baselineScoring && (
                               <AnalysisPanel
