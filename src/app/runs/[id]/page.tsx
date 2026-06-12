@@ -2,6 +2,7 @@
 import { Fragment, useEffect, useState } from "react";
 import PhotoStrip from "@/components/PhotoStrip";
 import PropertyMap from "@/components/PropertyMap";
+import NavMenu from "@/components/NavMenu";
 import { realAddress } from "@/lib/address";
 
 type Scored = {
@@ -102,8 +103,7 @@ export default function RunPage({ params }: { params: { id: string } }) {
         <a className="brand-home" href="/" title="Accueil">SCOUT</a>
         <h1 className="page-title">{run?.config_name || "Résultats"}</h1>
         <div className="topbar-nav">
-          <a className="btn ghost" href="/tracked">★ Suivis</a>
-          <a className="btn ghost" href="/">← Retour</a>
+          <NavMenu links={[{ href: "/tracked", label: "★ Suivis" }, { href: "/", label: "← Retour" }]} />
         </div>
       </div>
 

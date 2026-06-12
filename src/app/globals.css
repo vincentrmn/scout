@@ -101,21 +101,7 @@ input[type="text"], input[type="number"], input[type="password"], select {
   background: var(--paper-2); color: var(--ink);
   border: 1px solid var(--line); border-radius: 10px; outline: none;
 }
-input:focus, select:focus { border-color: var(--green); background-color: #fff; }
-
-/* Selects : apparence native retirée, chevron custom, coins arrondis (pill) */
-select {
-  appearance: none; -webkit-appearance: none; -moz-appearance: none;
-  padding: 9px 36px 9px 15px;
-  border-radius: 999px;
-  cursor: pointer;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b7270' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 14px center;
-  background-size: 12px;
-  transition: border-color 0.12s ease, background-color 0.12s ease;
-}
-select:hover { border-color: var(--green); }
+input:focus, select:focus { border-color: var(--green); background: #fff; }
 
 .row { display: flex; gap: 12px; flex-wrap: wrap; }
 .row > div { flex: 1; min-width: 140px; }
@@ -124,15 +110,15 @@ select:hover { border-color: var(--green); }
 .chip {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 6px 11px; border-radius: 999px; cursor: pointer; user-select: none;
-  border: 1px solid var(--line); background: var(--paper-2); font-size: 0.85rem; font-weight: 600;
+  border: 1px solid var(--line); background: var(--paper-2); font-size: 0.85rem; font-weight: 500;
   color: var(--ink-soft); transition: all 0.12s ease;
 }
 .chip.on { background: var(--ink); color: #fff; border-color: var(--ink); }
 
 .btn {
-  display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
-  padding: 11px 18px; border-radius: 10px; border: 1px solid var(--ink);
-  background: var(--ink); color: #fff; font: inherit; font-weight: 600;
+  display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+  padding: 8px 14px; border-radius: 10px; border: 1px solid var(--ink);
+  background: var(--ink); color: #fff; font: inherit; font-size: 0.875rem; font-weight: 500;
   transition: transform 0.08s ease, opacity 0.12s ease;
 }
 .btn:hover { opacity: 0.92; text-decoration: none; }
@@ -373,6 +359,10 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   .brand-home::before { width: 88px; height: 36px; }
   .topbar-nav { gap: 6px; }
 
+  /* Nav : menu déroulant ☰ au lieu des liens empilés côte à côte */
+  .nav-inline { display: none; }
+  .nav-toggle { display: inline-flex; }
+
   /* Boutons un peu plus compacts mais toujours confortables au doigt */
   .btn { padding: 9px 13px; }
 
@@ -437,3 +427,33 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   .prop-table .cell-detail { text-align: left; min-height: 0; }
   .prop-table .cell-detail::before { display: none; }
 }
+
+/* --------------------------------------------------------------------------
+   Navigation responsive (NavMenu) + barre de progression (exports)
+   -------------------------------------------------------------------------- */
+.nav-menu { position: relative; display: inline-flex; align-items: center; }
+.nav-inline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.nav-toggle { display: none; }
+.nav-dot {
+  position: absolute; top: 1px; right: 1px;
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--green); border: 2px solid #fff;
+}
+.nav-dropdown {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 1500;
+  background: #fff; border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: var(--shadow); padding: 6px; min-width: 190px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.nav-dropdown a {
+  padding: 10px 12px; border-radius: 8px; color: var(--ink);
+  font-size: 0.92rem; display: flex; align-items: center;
+}
+.nav-dropdown a:hover { background: var(--paper-2); text-decoration: none; }
+
+.progress-bar { height: 5px; border-radius: 999px; background: var(--paper-2); overflow: hidden; }
+.progress-bar > span {
+  display: block; height: 100%; width: 40%; border-radius: 999px;
+  background: var(--green); animation: progress-slide 1.1s ease-in-out infinite;
+}
+@keyframes progress-slide { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }

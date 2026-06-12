@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import PropertyMap, { type MapPoint } from "@/components/PropertyMap";
+import NavMenu from "@/components/NavMenu";
 
 type TrackedListing = {
   id: string;
@@ -53,8 +54,7 @@ export default function CartePage() {
         <a className="brand-home" href="/" title="Accueil">SCOUT</a>
         <h1 className="page-title">Carte des suivis</h1>
         <div className="topbar-nav">
-          <a className="btn ghost" href="/tracked">★ Suivis</a>
-          <a className="btn ghost" href="/">← Retour</a>
+          <NavMenu links={[{ href: "/tracked", label: "★ Suivis" }, { href: "/", label: "← Retour" }]} />
         </div>
       </div>
 
