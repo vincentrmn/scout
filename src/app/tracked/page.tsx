@@ -60,6 +60,7 @@ const STATUSES: { key: string; label: string }[] = [
   { key: "visit", label: "Visite prévue" },
   { key: "offer", label: "Offre faite" },
   { key: "won", label: "Gagné" },
+  { key: "sold", label: "Vendu" },
   { key: "lost", label: "Abandonné" },
 ];
 const statusLabel = (key?: string) =>
