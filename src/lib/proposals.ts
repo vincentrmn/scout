@@ -42,7 +42,7 @@ async function loadComps(): Promise<Comp[]> {
     FROM market_samples
     WHERE observed_at > now() - interval '84 days'
       AND surface BETWEEN 30 AND 70
-      AND cpe IN ('C','D','E','F')
+      AND (cpe IS NULL OR cpe IN ('C','D','E','F'))
       AND price_m2 IS NOT NULL
     ORDER BY listing_id, observed_at DESC
   `);
