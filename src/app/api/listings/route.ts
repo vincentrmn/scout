@@ -26,7 +26,12 @@ function matchCriteria(
   if (c.priceMin != null && l.price < c.priceMin) return false;
   if (c.priceMax != null && l.price > c.priceMax) return false;
   if (Array.isArray(c.cpeClasses) && c.cpeClasses.length && c.cpeClasses.length < 9) {
-    if (!l.cpe || !c.cpeClasses.includes(l.cpe)) return false;
+    // S13 — si includeNoCpe, un bien sans note de CPE reste éligible.
+    if (!l.cpe) {
+      if (!c.includeNoCpe) return false;
+    } else if (!c.cpeClasses.includes(l.cpe)) {
+      return false;
+    }
   }
   return true;
 }

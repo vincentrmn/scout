@@ -36,6 +36,8 @@ export default function NewSearch() {
   // S3 — toggle "Toutes les notes CPE" ON par defaut (cpeClasses = []).
   const [allCpe, setAllCpe] = useState(true);
   const [cpe, setCpe] = useState<string[]>([...CPE]);
+  // S13 — quand on filtre par classes, inclure aussi les biens sans note de CPE.
+  const [includeNoCpe, setIncludeNoCpe] = useState(false);
 
   // scoring — S4 : le prix de revente n'est plus ici (calibre par zone dans Reglages).
   const [worksEurPerM2, setWorks] = useState("1500");
@@ -64,6 +66,8 @@ export default function NewSearch() {
         priceMin: num(priceMin),
         priceMax: num(priceMax),
         cpeClasses: allCpe ? [] : cpe,
+        // Sans objet si « Toutes les notes CPE » est actif (déjà tout inclus).
+        includeNoCpe: allCpe ? false : includeNoCpe,
       },
       scoring: {
         worksEurPerM2: Number(worksEurPerM2),
@@ -168,11 +172,21 @@ export default function NewSearch() {
             <span className="zone-picker__toggle-label">Toutes les notes CPE</span>
           </div>
           {!allCpe && (
-            <div className="chips" style={{ marginTop: 12 }}>
-              {CPE.map((c) => (
-                <span key={c} className={`chip ${cpe.includes(c) ? "on" : ""}`} onClick={() => toggleCpe(c)}>{c}</span>
-              ))}
-            </div>
+            <>
+              <div className="chips" style={{ marginTop: 12 }}>
+                {CPE.map((c) => (
+                  <span key={c} className={`chip ${cpe.includes(c) ? "on" : ""}`} onClick={() => toggleCpe(c)}>{c}</span>
+                ))}
+              </div>
+              <div className="zone-picker__toggle-row" style={{ marginTop: 14, borderBottom: "none", paddingBottom: 0, marginBottom: 0 }}>
+                <Toggle checked={includeNoCpe} onChange={setIncludeNoCpe} />
+                <span className="zone-picker__toggle-label">Inclure les biens sans note de CPE</span>
+              </div>
+              <p className="zone-picker__hint" style={{ marginTop: 6 }}>
+                Garde aussi les annonces dont le CPE est « en cours d'élaboration » (pour ne pas rater une pépite).
+                Scrape alors toutes les notes puis filtre après coup : recherche un peu plus lente.
+              </p>
+            </>
           )}
         </div>
       </div>
