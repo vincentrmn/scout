@@ -3,6 +3,7 @@ import { pool, ensureSchema } from "@/lib/db";
 import { scoreListing, type Listing } from "@/lib/scoring";
 import { getZonePriceMap, resolveResalePerM2, quartierSlug } from "@/lib/zones";
 import { classifyEtat, hasAnthropicKey } from "@/lib/classify";
+import { generateProposals } from "@/lib/proposals";
 import type { RunStats } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -154,6 +155,15 @@ export async function POST(req: NextRequest) {
         }
         await napms(200);
       }
+    }
+
+    // S12 — Régénération des propositions APRÈS l'ingest (comps + état LLM frais).
+    // C'est ici (et pas dans le cron qui ne fait que déclencher le scrape async)
+    // que les nouveaux biens du jour deviennent une proposition. Best-effort.
+    try {
+      await generateProposals();
+    } catch (e) {
+      console.error("[ingest] generateProposals", e);
     }
 
     return NextResponse.json({ ok: true, survey: filtered.length });

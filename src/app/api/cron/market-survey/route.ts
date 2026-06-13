@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { pool, ensureSchema } from "@/lib/db";
+import { ensureSchema } from "@/lib/db";
 import { triggerSurveyRun, resolveBase } from "@/lib/trigger";
 import { fetchActesVille } from "@/lib/observatoire";
-import { generateProposals } from "@/lib/proposals";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // POST /api/cron/market-survey (header x-cron-secret)
-// Appelé chaque lundi par n8n. Déclenche un relevé de marché (is_survey),
-// rafraîchit les données Observatoire, et régénère les propositions si de
-// nouvelles données arrivent OU si > 90 jours depuis la dernière génération.
+// Appelé chaque lundi par n8n. Déclenche le relevé de marché (is_survey) et
+// rafraîchit la décote Observatoire. La régénération des propositions a lieu
+// À LA FIN de l'ingest du relevé (cf. /api/ingest), une fois les comps + l'état
+// LLM frais en base — pas ici, car le scrape est asynchrone (fire-and-forget).
 export async function POST(req: NextRequest) {
   try {
     const expected = process.env.CRON_SECRET || "";
@@ -24,22 +24,11 @@ export async function POST(req: NextRequest) {
     const survey = await triggerSurveyRun(base);
     const obs = await fetchActesVille();
 
-    const last = await pool.query<{ created_at: string }>(
-      `SELECT created_at FROM price_proposals ORDER BY created_at DESC LIMIT 1`
-    );
-    const lastGen = last.rows[0]?.created_at ? new Date(last.rows[0].created_at) : null;
-    const olderThan90d = !lastGen || Date.now() - lastGen.getTime() > 90 * 24 * 3600 * 1000;
-
-    let proposals: { created: number; total: number } | null = null;
-    if (obs.updated || olderThan90d) {
-      proposals = await generateProposals();
-    }
-
     return NextResponse.json({
       ok: true,
       survey: survey.ok ? { runId: survey.runId } : { error: survey.error },
       observatoire: obs,
-      regenerated: proposals,
+      note: "Propositions régénérées à la fin de l'ingest du relevé.",
     });
   } catch (err: any) {
     console.error("[POST /api/cron/market-survey]", err);
