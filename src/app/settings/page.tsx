@@ -346,6 +346,31 @@ export default function SettingsPage() {
             <label>Prix par défaut — {city.label} (€/m²)</label>
             <input type="number" value={vals[city.id] ?? ""} onChange={(e) => set(city.id, e.target.value)} placeholder="ex : 11000" style={{ maxWidth: 220 }} />
             <p className="muted" style={{ fontSize: "0.8rem", marginBottom: 0, marginTop: 8 }}>Appliqué à tout quartier non calibré ci-dessous.</p>
+            {(() => {
+              const prop = propByQ[city.id];
+              if (!prop) return null;
+              const isOpen = !!open[city.id];
+              const score = prop.calc?.confidence;
+              const cb = score != null ? confBadge(score) : null;
+              return (
+                <div style={{ marginTop: 12, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+                  <div className="q-action">
+                    <button className={`expand-btn ${isOpen ? "open" : ""}`} title="Détail du calcul" onClick={() => setOpen((o) => ({ ...o, [city.id]: !o[city.id] }))}>▸</button>
+                    <span className="mono" style={{ fontWeight: 600 }}>Proposition ville : {eur(prop.proposed_eur_m2)}/m²</span>
+                    {cb && <span className="conf-chip" style={{ background: cb.bg, color: cb.fg }}>{score}% · {cb.label}</span>}
+                    {prop.status === "accepted" ? (
+                      <span className="muted" style={{ fontSize: "0.82rem", fontWeight: 600 }}>✓ Appliqué</span>
+                    ) : (
+                      <div className="q-btns">
+                        <button className="btn green" onClick={() => decide(prop, "accept")}>Appliquer</button>
+                        <button className="btn ghost" onClick={() => decide(prop, "dismiss")}>Ignorer</button>
+                      </div>
+                    )}
+                  </div>
+                  {isOpen && <ProposalDetail c={prop.calc} />}
+                </div>
+              );
+            })()}
           </div>
 
           <div className="section-title"><h2>Quartiers</h2><span className="rule" /></div>
