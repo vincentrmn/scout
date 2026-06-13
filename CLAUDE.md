@@ -172,6 +172,10 @@ public/brouwers-logo.svg — injecté via .brand-home::before (130×54)
 **À RÉGLER (demandé par Vincent le 13/06) — runs n8n bloqués en « running » :**
 0. Un run reste « running · 0 bien » indéfiniment quand n8n reçoit le webhook mais ne POSTe jamais le résultat à `/api/ingest` (exécution n8n plantée sur un nœud avant le POST, ou 0 résultat sans fin propre). L'app n'a **aucun timeout** (`trigger.ts` est fire-and-forget). Cas constaté : veille du 13/06 12h00 (≠ collision avec le relevé, qui était `done` 14h avant — théorie file d'attente écartée). À faire : (a) **garde-fou** = un run sans réponse > ~30 min passe auto en `error` (dans `ensureSchema`/cron) ; (b) éventuellement **décaler le relevé** plus tôt la nuit ; (c) inspecter l'exécution coincée dans l'UI n8n pour la cause exacte (outils MCP n8n = approbation manuelle requise, bloqués en session). Palliatif immédiat : bouton ✕ sur le run.
 
+**Mis de côté / à reprendre sur demande (« next steps ? ») :**
+- **Motif d'exclusion par bien (étage n8n)** : aujourd'hui la page de run ventile les exclusions en agrégat (vendus / neufs / hors-CPE-type-doublons / incomplets). Le motif **bien par bien** pour l'étage n8n (CPE/type) impose que le scraper **émette les biens écartés avec leur raison** (modif workflow n8n, outils MCP sous approbation). Côté app, prévoir un champ pour les recevoir et les afficher dans le dépliant « Pourquoi N biens exclus ? ».
+- **Garde-fou runs n8n** : déjà livré (`reapStaleRuns`, cf. ci-dessous §9) ; reste à **inspecter l'exécution n8n coincée** pour la cause racine + éventuellement décaler le relevé plus tôt la nuit.
+
 **Ops à confirmer :**
 3. Variables de purge n8n posées (cf. §9).
 4. Suppression de l'ancien scraper + 4 workflows DEBUG dans l'UI n8n.

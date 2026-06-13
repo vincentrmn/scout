@@ -472,6 +472,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .q-row .q-input { width: 100%; }
 .q-row .q-action { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .q-row .q-btns { display: flex; gap: 8px; }
+/* Prix proposé à largeur fixe : aligne badge + « ✓ Appliqué » d'une ligne à l'autre. */
+.q-price { display: inline-block; min-width: 8rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 .q-row .q-detail { grid-column: 1 / -1; }
 .conf-chip { font-size: 0.7rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
 
