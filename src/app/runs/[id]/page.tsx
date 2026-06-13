@@ -20,6 +20,7 @@ type Scored = {
 type RunStats = {
   totalAtHome: number; pagesFetched: number; pagesPlanned: number;
   countSold: number; countNew: number; capped: boolean;
+  countReceived?: number; countIncomplete?: number;
 };
 type Run = {
   id: number; config_name: string; status: string; count: number;
@@ -118,26 +119,55 @@ export default function RunPage({ params }: { params: { id: string } }) {
 
       {run?.status === "done" && (
         <>
-          {stats && (
-            <div className="card" style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: "0.9rem" }}>
-                <strong>{stats.totalAtHome}</strong> bien{plur(stats.totalAtHome)} trouvé{plur(stats.totalAtHome)} ·{" "}
-                <strong>{stats.pagesFetched}</strong> page{plur(stats.pagesFetched)} scrapée{plur(stats.pagesFetched)}
-                {stats.pagesPlanned > stats.pagesFetched ? ` sur ${stats.pagesPlanned} prévues` : ""} ·{" "}
-                après filtres : <strong>{run.count}</strong> bien{plur(run.count)} analysé{plur(run.count)}.
+          {stats && (() => {
+            // Réconciliation : on attribue CHAQUE bien manquant à un motif.
+            // Résidu = exclus par n8n hors vendu/neuf (CPE hors critères, type,
+            // doublons) — ces biens ne parviennent jamais à l'app, d'où le bucket.
+            const sold = stats.countSold ?? 0;
+            const neuf = stats.countNew ?? 0;
+            const incomplete = stats.countIncomplete ?? 0;
+            const residual = Math.max(
+              0,
+              stats.totalAtHome - sold - neuf - incomplete - run.count
+            );
+            const exclusions: { label: string; n: number }[] = [
+              { label: "vendus (déjà sous compromis)", n: sold },
+              { label: "neufs / en construction", n: neuf },
+              { label: "hors critères CPE, type ou doublons", n: residual },
+              { label: "données incomplètes (prix ou surface manquant)", n: incomplete },
+            ].filter((e) => e.n > 0);
+            const totalExcluded = stats.totalAtHome - run.count;
+            return (
+              <div className="card" style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: "0.9rem" }}>
+                  <strong>{stats.totalAtHome}</strong> bien{plur(stats.totalAtHome)} trouvé{plur(stats.totalAtHome)} sur atHome ·{" "}
+                  <strong>{stats.pagesFetched}</strong> page{plur(stats.pagesFetched)} scrapée{plur(stats.pagesFetched)}
+                  {stats.pagesPlanned > stats.pagesFetched ? ` sur ${stats.pagesPlanned} prévues` : ""} ·{" "}
+                  après filtres : <strong>{run.count}</strong> bien{plur(run.count)} analysé{plur(run.count)}.
+                </div>
+                {stats.capped && (
+                  <div className="error" style={{ marginTop: 8 }}>
+                    ⚠️ Limite atteinte (50 pages ≈ 1000 biens). Augmente <span className="mono">maxPages</span> ou affine tes filtres.
+                  </div>
+                )}
+                {totalExcluded > 0 && (
+                  <details style={{ marginTop: 10 }}>
+                    <summary style={{ cursor: "pointer", fontSize: "0.82rem", color: "var(--ink-soft)" }}>
+                      Pourquoi {totalExcluded} bien{plur(totalExcluded)} exclu{plur(totalExcluded)} ?
+                    </summary>
+                    <ul style={{ margin: "8px 0 0", paddingLeft: 18, fontSize: "0.82rem", color: "var(--ink-soft)", lineHeight: 1.6 }}>
+                      {exclusions.map((e) => (
+                        <li key={e.label}><strong>{e.n}</strong> — {e.label}</li>
+                      ))}
+                    </ul>
+                    <p style={{ margin: "8px 0 0", fontSize: "0.75rem", color: "var(--ink-soft)" }}>
+                      Vendus / neufs / hors-CPE sont écartés au scraping (atHome) ; les données incomplètes le sont à l'analyse.
+                    </p>
+                  </details>
+                )}
               </div>
-              {stats.capped && (
-                <div className="error" style={{ marginTop: 8 }}>
-                  ⚠️ Limite atteinte (50 pages ≈ 1000 biens). Augmente <span className="mono">maxPages</span> ou affine tes filtres.
-                </div>
-              )}
-              {(stats.countSold > 0 || stats.countNew > 0) && (
-                <div className="muted" style={{ fontSize: "0.78rem", marginTop: 8 }}>
-                  Exclus : {stats.countSold} vendu{plur(stats.countSold)}, {stats.countNew} neuf{plur(stats.countNew)}.
-                </div>
-              )}
-            </div>
-          )}
+            );
+          })()}
 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 16, flexWrap: "wrap" }}>
             <p className="muted" style={{ margin: "0 0 12px" }}>
