@@ -216,17 +216,17 @@ export async function generateProposals(): Promise<{ created: number; total: num
   const decote = await getDecote();
   const comps = await loadComps();
 
-  // quartiers + prix courant + référence affichée VdL (zones).
-  const { rows: zones } = await pool.query<{ id: string; resale: string | null; announced: string | null }>(
-    `SELECT id, resale_eur_per_m2::float AS resale, announced_eur_per_m2::float AS announced FROM zones WHERE parent_id IS NOT NULL`
+  // Ville (parent) + quartiers : prix courant + référence Observatoire (zones).
+  // La ville reçoit aussi une proposition (réf Observatoire ville × décote),
+  // pour disposer d'un prix « ville » unique à valider comme les quartiers.
+  const { rows: allZones } = await pool.query<{ id: string; parent_id: string | null; resale: string | null; announced: string | null }>(
+    `SELECT id, parent_id, resale_eur_per_m2::float AS resale, announced_eur_per_m2::float AS announced FROM zones`
   );
-  const cityRow = await pool.query<{ resale: string | null }>(
-    `SELECT resale_eur_per_m2::float AS resale FROM zones WHERE parent_id IS NULL LIMIT 1`
-  );
-  const cityDefault = cityRow.rows[0]?.resale != null ? Number(cityRow.rows[0].resale) : 11000;
+  const cityZone = allZones.find((z) => z.parent_id == null);
+  const cityDefault = cityZone?.resale != null ? Number(cityZone.resale) : 11000;
 
   let created = 0;
-  for (const z of zones) {
+  for (const z of allZones) {
     const current = z.resale != null ? Number(z.resale) : cityDefault;
     const announcedRef = z.announced != null ? Number(z.announced) : null;
     const res = computeQuartier(z.id, comps, decote, current, announcedRef);
@@ -241,5 +241,5 @@ export async function generateProposals(): Promise<{ created: number; total: num
     );
     created++;
   }
-  return { created, total: zones.length };
+  return { created, total: allZones.length };
 }

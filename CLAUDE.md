@@ -167,6 +167,9 @@ public/brouwers-logo.svg — injecté via .brand-home::before (130×54)
 1. **Lightbox photos** : clic sur vignette → overlay plein écran dans la page (fond sombre, flèches ‹ ›, fermeture clic/Échap), composant PhotoStrip partagé Résultats + Suivis. Plus de nouvel onglet.
 2. **Suppression d'un run** : bouton ✕ par ligne dans « Dernières recherches » + `DELETE /api/runs?id=` (confirm avant). FK déjà propres (`findings.run_id SET NULL`).
 
+**À RÉGLER (demandé par Vincent le 13/06) — runs n8n bloqués en « running » :**
+0. Un run reste « running · 0 bien » indéfiniment quand n8n reçoit le webhook mais ne POSTe jamais le résultat à `/api/ingest` (exécution n8n plantée sur un nœud avant le POST, ou 0 résultat sans fin propre). L'app n'a **aucun timeout** (`trigger.ts` est fire-and-forget). Cas constaté : veille du 13/06 12h00 (≠ collision avec le relevé, qui était `done` 14h avant — théorie file d'attente écartée). À faire : (a) **garde-fou** = un run sans réponse > ~30 min passe auto en `error` (dans `ensureSchema`/cron) ; (b) éventuellement **décaler le relevé** plus tôt la nuit ; (c) inspecter l'exécution coincée dans l'UI n8n pour la cause exacte (outils MCP n8n = approbation manuelle requise, bloqués en session). Palliatif immédiat : bouton ✕ sur le run.
+
 **Ops à confirmer :**
 3. Variables de purge n8n posées (cf. §9).
 4. Suppression de l'ancien scraper + 4 workflows DEBUG dans l'UI n8n.
