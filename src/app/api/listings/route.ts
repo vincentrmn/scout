@@ -138,11 +138,13 @@ export async function GET() {
         .filter((cf) => matchCriteria(cf.criteria, row, listingLoc))
         .map((cf) => cf.id);
 
-      // Prix de revente du quartier (sert de defaut et a qualifier la source).
+      // Prix de revente du quartier (source de verite unique, page Prix de
+      // revente) : toujours lu en direct sur la zone, y compris pour les biens
+      // suivis. Les autres hypotheses (travaux, frais, marge) restent celles
+      // capturees a la recherche ; seul le prix de revente suit la zone.
       const zone = resolveResalePerM2(row.commune, priceMap);
-      // Hypotheses de la recherche : capturees, sinon defaut + prix de zone.
       const baseline = row.search_scoring
-        ? { ...row.search_scoring }
+        ? { ...row.search_scoring, resalePerM2: zone.resalePerM2 }
         : { ...DEFAULT_SCORING, resalePerM2: zone.resalePerM2 };
       const analysis = row.analysis_scoring ?? null;
       const eff = analysis ?? baseline;

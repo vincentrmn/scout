@@ -458,3 +458,58 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   background: var(--green); animation: progress-slide 1.1s ease-in-out infinite;
 }
 @keyframes progress-slide { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
+
+/* --------------------------------------------------------------------------
+   S12 — Prix de revente : lignes quartiers + comps (grilles régulières)
+   -------------------------------------------------------------------------- */
+.q-row {
+  display: grid; grid-template-columns: 1fr 140px;
+  gap: 8px 12px; align-items: center;
+  padding: 12px 0; border-bottom: 1px solid var(--line);
+}
+.q-row .q-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.q-row .q-name strong { font-weight: 600; }
+.q-row .q-input { width: 100%; }
+.q-row .q-action { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.q-row .q-detail { grid-column: 1 / -1; }
+.conf-chip { font-size: 0.7rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+
+.comp-row {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center; gap: 10px;
+  padding: 6px 0; border-bottom: 1px solid var(--line);
+}
+.comp-row .cm-price { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+.comp-row .cm-meta { font-size: 0.8rem; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.comp-row .cm-link { font-size: 0.85rem; white-space: nowrap; }
+
+/* Bloc méthode (tuto) intégré, pas un cadre isolé */
+.method-help { margin-top: 12px; font-size: 0.9rem; line-height: 1.55; }
+.method-help h4 { font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-soft); margin: 14px 0 6px; }
+.method-help ol, .method-help ul { margin: 0 0 4px; padding-left: 18px; }
+.method-help li { margin-bottom: 5px; }
+.method-help .legend { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.method-help dfn { font-style: normal; font-weight: 600; }
+
+/* Dépliant d'une proposition : lecture linéaire, une seule emphase */
+.prop-detail {
+  background: var(--paper-2); border-radius: 10px;
+  padding: 14px 16px; margin-top: 8px; font-size: 0.9rem; line-height: 1.5;
+}
+.prop-detail .pd-method { margin: 0; font-weight: 600; }
+.prop-detail .pd-sub { margin: 3px 0 0; font-size: 0.82rem; color: var(--ink-soft); }
+.prop-detail .pd-h {
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--ink-soft); font-weight: 600; margin: 16px 0 6px;
+}
+.pd-eq {
+  margin: 12px 0 2px; font-variant-numeric: tabular-nums;
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 8px;
+}
+.pd-eq .eq-op, .pd-eq .eq-term { color: var(--ink); }
+.pd-eq .eq-op { color: var(--ink-soft); }
+.pd-eq .eq-res { font-weight: 700; font-size: 1.1rem; color: var(--green-ink); }
+.pd-eq-note { margin: 0; font-size: 0.8rem; color: var(--ink-soft); }
+.pd-kv { display: grid; grid-template-columns: max-content 1fr; gap: 5px 14px; margin: 0; }
+.pd-kv dt { color: var(--ink-soft); }
+.pd-kv dd { margin: 0; font-variant-numeric: tabular-nums; }

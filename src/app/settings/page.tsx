@@ -35,7 +35,6 @@ type Proposal = {
 
 const eur = (n: number) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " €";
 const pct = (v: number) => `${Math.round(v * 1000) / 10} %`;
-const fmtDate = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString("fr-FR") : "—");
 const ETAT_LABEL: Record<string, string> = { a_renover: "à rénover", habitable: "habitable", renove: "rénové" };
 
 // Badge de confiance : ≥80 Élevée · 60–79 Bonne · 45–59 Modérée · <45 Faible.
@@ -46,15 +45,14 @@ function confBadge(score: number): { label: string; bg: string; fg: string } {
   return { label: "Faible", bg: "#fdecea", fg: "#c0392b" };
 }
 
-function Step({ n, title, children }: { n?: string; title: string; children: React.ReactNode }) {
-  return (
-    <div style={{ marginBottom: 12 }}>
-      <div className="muted" style={{ fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>
-        {n ? `${n}. ` : ""}{title}
-      </div>
-      <div style={{ fontSize: "0.9rem" }}>{children}</div>
-    </div>
-  );
+// Phrase décrivant le niveau retenu (médiane rénové / P75 quartier / cluster / ville / réf VdL).
+function methodLine(c: Calc): string {
+  if (c.basis === "reference") return "Référence officielle Ville de Luxembourg 2025";
+  const n = `${c.n_used} comparable${c.n_used > 1 ? "s" : ""}`;
+  if (c.basis === "renove") return `Médiane des biens rénovés · ${n}`;
+  if (c.level === "ville") return `P75 ville (repli, faute de comps locaux) · ${n}`;
+  if (c.level === "cluster") return `P75 du cluster de quartiers voisins · ${n}`;
+  return `P75 du quartier · ${n}`;
 }
 
 function ProposalDetail({ c }: { c: Calc }) {
@@ -64,112 +62,136 @@ function ProposalDetail({ c }: { c: Calc }) {
   const habit = c.comps.filter((x) => x.etat === "habitable").length;
   const aren = c.comps.filter((x) => x.etat === "a_renover").length;
   const indet = c.comps.filter((x) => !x.etat).length;
-  const basisLabel =
-    c.basis === "renove" ? "médiane des rénovés"
-    : c.basis === "p75" ? "P75 — le haut du marché"
-    : "référence officielle VdL 2025";
+  const parts = [
+    renove && `${renove} rénové${renove > 1 ? "s" : ""}`,
+    habit && `${habit} habitable${habit > 1 ? "s" : ""}`,
+    aren && `${aren} à rénover`,
+    indet && `${indet} indéterminé${indet > 1 ? "s" : ""}`,
+  ].filter(Boolean);
   const delta = c.current_eur_m2 && c.current_eur_m2 > 0
     ? Math.round(((c.proposed_eur_m2 - c.current_eur_m2) / c.current_eur_m2) * 100) : null;
 
   return (
-    <div style={{ background: "var(--paper-2)", borderRadius: 10, padding: "14px 16px", marginTop: 8 }}>
-      <Step n="1" title="Comparables">
-        {c.comps.length > 0 ? (
-          <span>
-            {c.comps.length} biens · {renove} rénové{renove > 1 ? "s" : ""} · {habit} habitable{habit > 1 ? "s" : ""}
-            {aren ? ` · ${aren} à rénover` : ""}{indet ? ` · ${indet} indéterminé` : ""}
-          </span>
-        ) : (
-          <span className="muted">Trop peu de comps dans le quartier — on s'appuie sur la référence officielle.</span>
-        )}
-      </Step>
+    <div className="prop-detail">
+      <p className="pd-method">{methodLine(c)}</p>
+      {parts.length > 0 && <p className="pd-sub">{parts.join(" · ")}</p>}
 
-      <Step n="2" title="Prix affiché cible">
-        <span className="mono" style={{ fontWeight: 600 }}>{eur(c.cible_eur_m2)}/m²</span> — {basisLabel}
-        {c.comps.length > 0 && c.percentiles.median != null && (
-          <div className="muted" style={{ fontSize: "0.78rem", marginTop: 2 }}>
-            P25 {eur(c.percentiles.p25 ?? 0)} · médiane {eur(c.percentiles.median)} · P75 {eur(c.percentiles.p75 ?? 0)}
-          </div>
-        )}
-      </Step>
-
-      <Step n="3" title="Décote affiché → signé">
-        − {pct(d.decote)}{" "}
+      <div className="pd-eq">
+        <span className="eq-term">{eur(c.cible_eur_m2)}/m²</span>
+        <span className="eq-op">× (1 − {pct(d.decote)})</span>
+        <span className="eq-op">=</span>
+        <span className="eq-res">{eur(c.proposed_eur_m2)}/m²</span>
+      </div>
+      <p className="pd-eq-note">
+        prix affiché cible × décote{" "}
         {d.source === "fallback"
-          ? <span className="muted">(fallback prudent — pas encore de données signées)</span>
-          : <span className="muted">(calculée — Observatoire{d.period ? ` T_${d.period}` : ""})</span>}
-      </Step>
+          ? "prudente (pas encore de données notariales)"
+          : `mesurée (Observatoire${d.period ? ` ${d.period}` : ""})`}
+        {" "}→ arrondi aux 50 € inférieurs
+      </p>
 
-      <Step title="= Proposition">
-        <span className="mono" style={{ fontWeight: 700, fontSize: "1.05rem" }}>{eur(c.proposed_eur_m2)}/m²</span>
-        <div className="mono muted" style={{ fontSize: "0.78rem", marginTop: 2 }}>{c.formula}</div>
-      </Step>
+      {c.comps.length > 0 && c.percentiles.median != null && (
+        <>
+          <div className="pd-h">Distribution des prix affichés (€/m²)</div>
+          <dl className="pd-kv">
+            <dt>P25</dt><dd>{eur(c.percentiles.p25 ?? 0)}</dd>
+            <dt>Médiane</dt><dd>{eur(c.percentiles.median)}</dd>
+            <dt>P75</dt><dd>{eur(c.percentiles.p75 ?? 0)}</dd>
+          </dl>
+        </>
+      )}
 
-      <Step title="Repères">
-        <div style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: "0.86rem" }}>
-          <span>
-            Prix actuel : <span className="mono">{c.current_eur_m2 != null ? `${eur(c.current_eur_m2)}/m²` : "—"}</span>{" "}
-            → proposé <span className="mono">{eur(c.proposed_eur_m2)}/m²</span>
-            {delta != null ? ` (${delta > 0 ? "+" : ""}${delta} %)` : ""}
-          </span>
-          {c.vdl_ref != null && (
-            <span>Réf. officielle VdL 2025 : <span className="mono">{eur(c.vdl_ref)}/m²</span></span>
-          )}
-          {c.confidence != null && (
-            <span>
-              Confiance : <span style={{ fontWeight: 700, color: cb.fg }}>{c.confidence}% {cb.label}</span>{" "}
-              {c.confidence_reason && <span className="muted">— {c.confidence_reason}</span>}
-            </span>
-          )}
-        </div>
-      </Step>
+      <div className="pd-h">Repères</div>
+      <dl className="pd-kv">
+        <dt>Prix actuel</dt>
+        <dd>
+          {c.current_eur_m2 != null ? `${eur(c.current_eur_m2)}/m²` : "—"} → {eur(c.proposed_eur_m2)}/m²
+          {delta != null ? ` (${delta > 0 ? "+" : ""}${delta} %)` : ""}
+        </dd>
+        {c.vdl_ref != null && (
+          <>
+            <dt>Réf. VdL 2025</dt><dd>{eur(c.vdl_ref)}/m²</dd>
+          </>
+        )}
+        <dt>Confiance</dt>
+        <dd>
+          <span className="conf-chip" style={{ background: cb.bg, color: cb.fg }}>{c.confidence}% · {cb.label}</span>
+          {c.confidence_reason && <span className="muted"> — {c.confidence_reason}</span>}
+        </dd>
+      </dl>
 
       {c.comps.length > 0 && (
-        <div style={{ marginTop: 6 }}>
-          <div className="muted" style={{ fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
-            Comparables détaillés ({c.comps.length})
-          </div>
+        <>
+          <div className="pd-h">Comparables ({c.comps.length})</div>
           {c.comps.map((cp) => (
-            <div key={cp.listing_id} style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: 8, padding: "5px 0", borderBottom: "1px solid var(--line)" }}>
-              <span className="mono" style={{ fontWeight: 600, minWidth: 92 }}>{eur(cp.price_m2)}/m²</span>
-              <span className="muted" style={{ fontSize: "0.8rem" }}>{cp.surface} m² · CPE {cp.cpe || "—"}</span>
-              {cp.etat && (
-                <span className="badge">{ETAT_LABEL[cp.etat] ?? cp.etat}{cp.etat_confidence != null ? ` ${Math.round(cp.etat_confidence * 100)}%` : ""}</span>
-              )}
-              {cp.url && <a href={cp.url} target="_blank" rel="noreferrer" style={{ fontSize: "0.8rem", marginLeft: "auto" }}>annonce ↗</a>}
+            <div key={cp.listing_id} className="comp-row">
+              <span className="cm-price">{eur(cp.price_m2)}/m²</span>
+              <span className="cm-meta">
+                {cp.surface} m² · CPE {cp.cpe || "—"}
+                {cp.etat ? ` · ${ETAT_LABEL[cp.etat] ?? cp.etat}` : ""}
+                {cp.etat && cp.etat_confidence != null ? ` ${Math.round(cp.etat_confidence * 100)}%` : ""}
+              </span>
+              {cp.url
+                ? <a className="cm-link" href={cp.url} target="_blank" rel="noreferrer">annonce ↗</a>
+                : <span className="cm-link muted">—</span>}
             </div>
           ))}
-        </div>
+        </>
       )}
     </div>
   );
 }
 
-function Tuto({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+// Tuto intégré dans la carte d'intro (pas un cadre orphelin).
+function MethodHelp() {
   return (
-    <div className="card" style={{ marginTop: 14 }}>
-      <button className="btn ghost" onClick={onToggle}>ⓘ Comment c'est calculé {open ? "▲" : "▼"}</button>
-      {open && (
-        <div style={{ marginTop: 12, fontSize: "0.88rem", lineHeight: 1.55 }}>
-          <p style={{ margin: "0 0 6px", fontWeight: 600 }}>Construction de la proposition</p>
-          <ol style={{ margin: "0 0 12px", paddingLeft: 18 }}>
-            <li><strong>Comparables</strong> — annonces atHome similaires (appartement ancien, CPE C–F, 30–70 m²), 12 semaines glissantes, dédupliquées. L'IA classe chacune : rénové / habitable / à rénover.</li>
-            <li><strong>Prix affiché cible</strong> — on vise le haut du marché : ≥ 8 comps rénovés → <em>médiane des rénovés</em> ; sinon ≥ 12 comps → <em>P75</em> ; sinon repli : réf. VdL du quartier → cluster → ville.</li>
-            <li><strong>Décote affiché → signé</strong> — on retire l'écart entre prix annoncé et prix signé notaire (borné 4–12 %, fallback prudent 6,5 % tant qu'on n'a pas la donnée notariale).</li>
-            <li><strong>Proposition</strong> = cible × (1 − décote), arrondie aux 50 € inférieurs.</li>
-          </ol>
-          <p style={{ margin: "0 0 6px", fontWeight: 600 }}>Note de confiance (0–100) = base(niveau) × taille(n) × dispersion × décote</p>
-          <ul style={{ margin: "0 0 8px", paddingLeft: 18 }}>
-            <li><strong>base</strong> : médiane rénové 95 · P75 80 · réf VdL / cluster 60 · ville 40</li>
-            <li><strong>× taille</strong> : pénalise si peu de comps</li>
-            <li><strong>× dispersion</strong> : pénalise si les €/m² sont très étalés</li>
-            <li><strong>× décote</strong> : calculée ×1 · fallback ×0,85</li>
+    <div className="method-help">
+      <h4>Comment la proposition est calculée</h4>
+      <ol>
+        <li>
+          <dfn>Comparables</dfn> — les annonces atHome ressemblant à une cible d'investissement :
+          appartement ancien, CPE C à F, 30 à 70 m², sur les 12 dernières semaines, dédoublonnées.
+          L'IA lit chaque annonce et la classe en <em>rénové</em>, <em>habitable</em> ou <em>à rénover</em>.
+        </li>
+        <li>
+          <dfn>Prix affiché cible</dfn> — le prix de revente visé, au m². On prend le premier niveau
+          disponible, du plus fiable au plus large :
+          <ul>
+            <li><dfn>Médiane des rénovés</dfn> dès qu'on a ≥ 8 biens rénovés dans le quartier — le cœur du marché rénové.</li>
+            <li><dfn>P75 du quartier</dfn> sinon, dès ≥ 12 comparables — le 75ᵉ centile, c.-à-d. le haut du marché (¾ des biens sont en dessous).</li>
+            <li><dfn>Référence VdL</dfn> sinon — la moyenne officielle publiée par la Ville de Luxembourg pour ce quartier.</li>
+            <li><dfn>Cluster</dfn> sinon — un groupe de quartiers voisins comparables, dont on mutualise les comps quand le quartier seul en manque.</li>
+            <li><dfn>P75 ville</dfn> en tout dernier recours — calculé sur nos annonces, toute la ville confondue. À distinguer de la <em>Référence VdL</em> (chiffre officiel) : ici c'est notre propre P75 issu du scraping.</li>
           </ul>
-          <p className="muted" style={{ fontSize: "0.82rem", margin: 0 }}>
-            Badges : ≥ 80 Élevée · 60–79 Bonne · 45–59 Modérée · &lt; 45 Faible. On ne dépasse jamais 100 % — on n'est jamais certain.
-          </p>
-        </div>
-      )}
+        </li>
+        <li>
+          <dfn>Décote affiché → signé</dfn> — l'écart entre le prix annoncé et le prix réellement signé chez le notaire.
+          Mesurée sur les données de l'Observatoire de l'Habitat (bornée 4 à 12 %), avec un repli prudent à 6,5 % tant qu'on n'a pas la donnée notariale.
+        </li>
+        <li>
+          <dfn>Proposition</dfn> = prix affiché cible × (1 − décote), arrondie aux 50 € inférieurs.
+          La saisie manuelle reste toujours prioritaire : rien n'est appliqué sans ton clic.
+        </li>
+      </ol>
+
+      <h4>Note de confiance</h4>
+      <p style={{ margin: "0 0 6px" }}>
+        Un score 0–100 = <strong>base</strong> (selon le niveau retenu) × <strong>taille</strong> (nombre de comps)
+        × <strong>dispersion</strong> (étalement des €/m²) × <strong>décote</strong> (mesurée ou repli).
+      </p>
+      <ul>
+        <li><dfn>base</dfn> : médiane rénové 95 · P75 quartier 80 · réf VdL / cluster 60 · ville 40</li>
+        <li><dfn>taille</dfn> : abaisse le score quand il y a peu de comparables</li>
+        <li><dfn>dispersion</dfn> : abaisse le score quand les prix sont très étalés</li>
+        <li><dfn>décote</dfn> : ×1 si mesurée, ×0,85 si repli prudent</li>
+      </ul>
+      <div className="legend">
+        <span className="conf-chip" style={{ background: "#e7f7f1", color: "#0a8f6c" }}>≥ 80 · Élevée</span>
+        <span className="conf-chip" style={{ background: "#eef4fb", color: "#2b6cb0" }}>60–79 · Bonne</span>
+        <span className="conf-chip" style={{ background: "#fff7e6", color: "#9a6b00" }}>45–59 · Modérée</span>
+        <span className="conf-chip" style={{ background: "#fdecea", color: "#c0392b" }}>&lt; 45 · Faible</span>
+      </div>
+      <p className="pd-sub" style={{ marginTop: 8 }}>On ne dépasse jamais 100 % : on n'est jamais certain.</p>
     </div>
   );
 }
@@ -269,21 +291,26 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <p className="muted" style={{ margin: 0, flex: 1, minWidth: 240 }}>
-          Prix de revente cible au m² par quartier. La saisie manuelle reste prioritaire ; les propositions sont calculées (jamais appliquées sans clic).
-        </p>
-        <button className="btn ghost" onClick={recalc} disabled={recalcBusy || loading}>
-          {recalcBusy ? "Calcul…" : "↻ Recalculer maintenant"}
+      <div className="card" style={{ marginTop: 14 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+          <p className="muted" style={{ margin: 0, flex: 1, minWidth: 240 }}>
+            Prix de revente cible au m² par quartier. La saisie manuelle reste prioritaire ;
+            les propositions sont calculées automatiquement et ne s'appliquent qu'à ton clic.
+          </p>
+          <button className="btn ghost" onClick={recalc} disabled={recalcBusy || loading}>
+            {recalcBusy ? "Calcul…" : "↻ Recalculer"}
+          </button>
+        </div>
+        <button className="btn ghost" style={{ marginTop: 10 }} onClick={() => setShowHelp((v) => !v)}>
+          ⓘ Comment c'est calculé {showHelp ? "▲" : "▼"}
         </button>
+        {showHelp && <MethodHelp />}
       </div>
-
-      <Tuto open={showHelp} onToggle={() => setShowHelp((v) => !v)} />
 
       {proposals.length > 0 && (
         <div className="card" style={{ marginTop: 14, borderColor: "var(--green)", background: "var(--green-soft)" }}>
           <strong>{proposals.length} proposition{proposals.length > 1 ? "s" : ""} de mise à jour</strong>
-          {period && <span className="muted"> (données Observatoire T_{period})</span>} — à valider quartier par quartier ci-dessous.
+          {period && <span className="muted"> (données Observatoire {period})</span>} — à valider quartier par quartier ci-dessous.
         </div>
       )}
 
@@ -299,45 +326,39 @@ export default function SettingsPage() {
 
           <div className="section-title"><h2>Quartiers</h2><span className="rule" /></div>
 
-          <div className="card" style={{ padding: "8px 16px" }}>
+          <div className="card" style={{ padding: "4px 16px" }}>
             {city.quartiers.map((q) => {
               const prop = propByQ[q.id];
               const isOpen = !!open[q.id];
               const score = prop?.calc?.confidence;
               const cb = score != null ? confBadge(score) : null;
               return (
-                <Fragment key={q.id}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "10px 0", borderBottom: "1px solid var(--line)" }}>
-                    <div style={{ flex: "1 1 160px", display: "flex", alignItems: "center", gap: 8 }}>
-                      {prop && (
-                        <button className={`expand-btn ${isOpen ? "open" : ""}`} title="Détail du calcul" onClick={() => setOpen((o) => ({ ...o, [q.id]: !o[q.id] }))}>▸</button>
-                      )}
-                      <strong style={{ fontWeight: 600 }}>{q.label}</strong>
-                    </div>
-                    <div style={{ flex: "0 0 auto" }}>
-                      <input type="number" value={vals[q.id] ?? ""} onChange={(e) => set(q.id, e.target.value)} placeholder={defaultPrice ? `défaut ${defaultPrice}` : "défaut"} style={{ width: 130 }} title="Prix actuel (saisie manuelle, prioritaire)" />
-                    </div>
-                    <div style={{ flex: "1 1 220px", display: "flex", alignItems: "center", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
-                      {prop ? (
-                        <>
-                          <span className="mono" style={{ fontWeight: 600 }}>{eur(prop.proposed_eur_m2)}/m²</span>
-                          {cb && (
-                            <span style={{ fontSize: "0.7rem", fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: cb.bg, color: cb.fg }}>
-                              {score}% {cb.label}
-                            </span>
-                          )}
-                          <button className="btn green" onClick={() => decide(prop, "accept")}>Appliquer</button>
-                          <button className="btn ghost" onClick={() => decide(prop, "dismiss")}>Ignorer</button>
-                        </>
-                      ) : (
-                        <span className="muted" style={{ fontSize: "0.82rem" }}>—</span>
-                      )}
-                    </div>
+                <div className="q-row" key={q.id}>
+                  <div className="q-name">
+                    {prop && (
+                      <button className={`expand-btn ${isOpen ? "open" : ""}`} title="Détail du calcul" onClick={() => setOpen((o) => ({ ...o, [q.id]: !o[q.id] }))}>▸</button>
+                    )}
+                    <strong>{q.label}</strong>
                   </div>
-                  {prop && isOpen && (
-                    <div style={{ padding: "0 0 12px" }}><ProposalDetail c={prop.calc} /></div>
+                  <input className="q-input" type="number" value={vals[q.id] ?? ""} onChange={(e) => set(q.id, e.target.value)} placeholder={defaultPrice ? `défaut ${defaultPrice}` : "défaut"} title="Prix actuel (saisie manuelle, prioritaire)" />
+
+                  {prop ? (
+                    <div className="q-action">
+                      <span className="mono" style={{ fontWeight: 600 }}>→ {eur(prop.proposed_eur_m2)}/m²</span>
+                      {cb && (
+                        <span className="conf-chip" style={{ background: cb.bg, color: cb.fg }}>{score}% · {cb.label}</span>
+                      )}
+                      <button className="btn green" onClick={() => decide(prop, "accept")}>Appliquer</button>
+                      <button className="btn ghost" onClick={() => decide(prop, "dismiss")}>Ignorer</button>
+                    </div>
+                  ) : (
+                    <div className="q-action"><span className="muted" style={{ fontSize: "0.82rem" }}>Pas de proposition</span></div>
                   )}
-                </Fragment>
+
+                  {prop && isOpen && (
+                    <div className="q-detail"><ProposalDetail c={prop.calc} /></div>
+                  )}
+                </div>
               );
             })}
           </div>
