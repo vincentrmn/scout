@@ -49,6 +49,14 @@ export async function POST(req: NextRequest) {
     (l) => l && typeof l.price === "number" && typeof l.surface === "number" && l.surface > 0
   );
 
+  // S13 — réconciliation des exclusions : on enregistre combien de biens n8n a
+  // transmis (countReceived) et combien l'app a rejetés faute de prix/surface
+  // exploitable (countIncomplete). Permet d'expliquer chaque bien manquant.
+  const mergedStats: RunStats | null = stats
+    ? { ...stats, countReceived: safe.length, countIncomplete: safe.length - filtered.length }
+    : null;
+  const mergedStatsJson = mergedStats ? JSON.stringify(mergedStats) : statsJson;
+
   // S5 — prix actuellement stockes (detection baisse/hausse + nouveaute). 1 SELECT batch.
   const ids = filtered.map((l) => l.id);
   const prevRows =
@@ -136,7 +144,7 @@ export async function POST(req: NextRequest) {
     );
     await pool.query(
       `UPDATE runs SET status='done', count=$2, stats=$3, finished_at=now() WHERE id=$1`,
-      [runId, filtered.length, statsJson]
+      [runId, filtered.length, mergedStatsJson]
     );
 
     // S12 Phase 3 — classification LLM (séquentielle, ~5 req/s), best-effort :
@@ -188,7 +196,7 @@ export async function POST(req: NextRequest) {
 
   await pool.query(
     `UPDATE runs SET status='done', count=$2, results=$3, stats=$4, finished_at=now() WHERE id=$1`,
-    [runId, scored.length, JSON.stringify(scored), statsJson]
+    [runId, scored.length, JSON.stringify(scored), mergedStatsJson]
   );
 
   // S6 Phase 3 — Nouveautes : EVENEMENTS GO/Negocier captures sur TOUT run

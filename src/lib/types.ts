@@ -72,4 +72,9 @@ export type RunStats = {
   countSold: number;
   countNew: number;
   capped: boolean;
+  /** S13 — réconciliation des exclusions (renseignées par /api/ingest).
+   *  countReceived = biens transmis par n8n (après ses filtres vendu/neuf/CPE).
+   *  countIncomplete = biens rejetés côté app (prix ou surface manquant/invalide). */
+  countReceived?: number;
+  countIncomplete?: number;
 };
