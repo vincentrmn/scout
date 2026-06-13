@@ -148,6 +148,8 @@ public/brouwers-logo.svg — injecté via .brand-home::before (130×54)
 - **n8n volume** : 5 GB depuis le 11/06. ⚠️ Vérifier que `EXECUTIONS_DATA_PRUNE=true` et `EXECUTIONS_DATA_MAX_AGE=168` sont posées sur le service n8n.
 - **Postgres app** : croissance dominée par `runs.results` (~1 Mo/jour avec veille). Purge des runs > 60 jours au backlog.
 - **Webhook** : path `scout-search` = contrat entre l'app et n8n. Le changer = mettre à jour `N8N_WEBHOOK_URL`.
+- **Données Observatoire par quartier** (`zones.announced_eur_per_m2`) : maj **manuelle** (Vincent envoie le fichier, Claude réimporte). À chaque réimport, **bumper `OBSERVATOIRE_REF_DATE`** dans `src/app/settings/page.tsx` → la page Prix de revente affiche un rappel ⏰ au-delà de 3 mois. La décote (`observatoire.ts`) est, elle, auto-fetchée depuis data.public.lu.
+- **Garde-fou runs** : `reapStaleRuns()` (`db.ts`) bascule en `error` tout run « running » > 45 min (n8n fire-and-forget sans timeout). Appelé sur `GET /api/runs` et le cron veille.
 - Ancien scraper `iwHOAiQKAUeleOoo` + 4 workflows DEBUG : à supprimer dans l'UI n8n.
 
 ## 10. Conventions de travail avec Vincent (STRICTES)

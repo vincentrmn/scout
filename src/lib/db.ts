@@ -329,3 +329,21 @@ export function ensureSchema(): Promise<void> {
   }
   return global._bbinvestSchema;
 }
+
+/**
+ * Garde-fou : le webhook n8n est fire-and-forget (cf. trigger.ts) et l'app n'a
+ * aucun timeout. Si n8n ne POSTe jamais le résultat (exécution plantée avant le
+ * POST, ou file bloquée), le run reste « running » à vie. On bascule en erreur
+ * tout run resté « running » plus de 45 min (au-delà de tout scrape légitime,
+ * survey comprise). Idempotent, sans effet sur les runs terminés.
+ */
+export async function reapStaleRuns(): Promise<void> {
+  await pool.query(
+    `UPDATE runs
+       SET status = 'error',
+           error = 'Délai dépassé : aucune réponse du scraper (n8n) après 45 min. Le run a été clôturé automatiquement.',
+           finished_at = now()
+     WHERE status = 'running'
+       AND started_at < now() - interval '45 minutes'`
+  );
+}

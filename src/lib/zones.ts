@@ -26,10 +26,17 @@ export async function getZoneTree(): Promise<ZoneTree[]> {
   }));
 }
 
+// Synonymes : libell\u00e9s atHome qui ne matchent pas l'id de zone (zones fusionn\u00e9es).
+// Ex. \u00ab Cloche d'Or \u00bb fait partie de la zone `gasperich` (\u00ab Gasperich / Cloche d'Or \u00bb).
+const SLUG_ALIASES: Record<string, string> = {
+  "cloche-d-or": "gasperich",
+  "gasperich-cloche-d-or": "gasperich",
+};
+
 /**
  * Normalise un libelle de commune atHome ("Luxembourg-Limpertsberg") vers l'id
  * de zone correspondant ("limpertsberg"). Retire le prefixe ville, les accents,
- * et slugifie. Retourne null si vide.
+ * slugifie, puis applique les synonymes connus. Retourne null si vide.
  */
 export function quartierSlug(commune?: string | null): string | null {
   if (!commune) return null;
@@ -39,7 +46,8 @@ export function quartierSlug(commune?: string | null): string | null {
     .replace(/[\u0300-\u036f]/g, ""); // retire les accents
   s = s.replace(/^luxembourg[-\s]+/, "").trim();
   s = s.replace(/['\s/]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
-  return s || null;
+  if (!s) return null;
+  return SLUG_ALIASES[s] ?? s;
 }
 
 export type ZonePriceMap = {

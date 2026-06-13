@@ -34,6 +34,10 @@ type Proposal = {
   created_at: string; decided_at?: string | null;
 };
 
+// Date du dernier import des données Observatoire par quartier (announced_eur_per_m2).
+// ⚠️ À BUMPER à chaque mise à jour du fichier Observatoire (cf. CLAUDE.md §9). Format AAAA-MM-JJ.
+const OBSERVATOIRE_REF_DATE = "2026-06-12";
+
 const eur = (n: number) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " €";
 const pct = (v: number) => `${Math.round(v * 1000) / 10} %`;
 const ETAT_LABEL: Record<string, string> = { a_renover: "à rénover", habitable: "habitable", renove: "rénové" };
@@ -264,6 +268,13 @@ export default function SettingsPage() {
   const period = proposals[0]?.calc?.decote?.period ?? null;
   const pendingCount = useMemo(() => proposals.filter((p) => p.status === "pending").length, [proposals]);
 
+  // Rappel trimestriel : les données Observatoire par quartier sont mises à jour
+  // à la main. On alerte au-delà de ~3 mois depuis le dernier import.
+  const refDate = new Date(OBSERVATOIRE_REF_DATE);
+  const refAgeDays = Math.floor((Date.now() - refDate.getTime()) / 86400000);
+  const refStale = refAgeDays > 92;
+  const refLabel = refDate.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+
   const defaultPrice = useMemo(() => {
     const city = tree[0];
     if (!city) return 0;
@@ -329,7 +340,17 @@ export default function SettingsPage() {
           ⓘ Comment c'est calculé {showHelp ? "▲" : "▼"}
         </button>
         {showHelp && <MethodHelp />}
+        <p className="muted" style={{ fontSize: "0.78rem", margin: "10px 0 0" }}>
+          Réf. Observatoire par quartier : dernière mise à jour {refLabel}.
+        </p>
       </div>
+
+      {refStale && (
+        <div className="card" style={{ marginTop: 14, borderColor: "#e0a800", background: "#fff8e6" }}>
+          <strong>⏰ Données Observatoire à rafraîchir</strong> — la réf. par quartier date de {refLabel}
+          {" "}(plus de 3 mois). Récupère le dernier fichier de l'Observatoire de l'Habitat et envoie-le-moi pour réimport.
+        </div>
+      )}
 
       {pendingCount > 0 && (
         <div className="card" style={{ marginTop: 14, borderColor: "var(--green)", background: "var(--green-soft)" }}>

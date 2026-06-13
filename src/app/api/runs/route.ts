@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { pool, ensureSchema } from "@/lib/db";
+import { pool, ensureSchema, reapStaleRuns } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   await ensureSchema();
+  await reapStaleRuns(); // clôture les runs « running » sans réponse n8n (>45 min)
   const id = req.nextUrl.searchParams.get("id");
   if (id) {
     const { rows } = await pool.query(`SELECT * FROM runs WHERE id = $1`, [id]);
