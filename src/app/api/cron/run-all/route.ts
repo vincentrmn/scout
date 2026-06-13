@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { pool, ensureSchema } from "@/lib/db";
+import { pool, ensureSchema, reapStaleRuns } from "@/lib/db";
 import { triggerRun, resolveBase } from "@/lib/trigger";
 
 export const runtime = "nodejs";
@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
   }
 
   await ensureSchema();
+  await reapStaleRuns(); // clôture les runs précédents restés bloqués sans réponse n8n
   const base = resolveBase(req);
 
   const { rows } = await pool.query<{ id: number; name: string }>(
