@@ -136,7 +136,7 @@ function computeConfidence(
   const levelLabel =
     level === "quartier_renove" ? "médiane rénové"
     : level === "quartier_p75" ? "P75 quartier"
-    : level === "vdl" ? "référence VdL"
+    : level === "vdl" ? "réf Observatoire"
     : level === "cluster" ? `cluster (${basis === "renove" ? "médiane rénové" : "P75"})`
     : "P75 ville";
   const parts = [levelLabel];
@@ -190,7 +190,7 @@ export function computeQuartier(
   const cibleLabel =
     basis === "renove" ? `médiane rénové (n=${used.length})`
     : basis === "p75" ? `P75 (n=${used.length})`
-    : `référence VdL 2025`;
+    : `référence Observatoire 2025`;
   const formula =
     `${cibleLabel} = ${fmtEur(cible)} €/m² × (1 − ${Math.round(decote.decote * 1000) / 10} %` +
     `${decote.source === "fallback" ? " fallback" : ""}) = ${fmtEur(cible * (1 - decote.decote))} → arrondi ${fmtEur(proposed)} €/m²`;
