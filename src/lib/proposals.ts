@@ -97,10 +97,54 @@ export type ProposalCalc = {
   proposed_eur_m2: number;
   current_eur_m2: number | null;
   vdl_ref: number | null; // référence affichée VdL 2025 du quartier (cross-check)
+  confidence: number; // note de confiance 0–100
+  confidence_reason: string; // facteurs ayant fait la note
   formula: string;
   comps: ReturnType<typeof compDetail>[];
   generated_at: string;
 };
+
+// Note de confiance 0–100 = base(niveau) × taille(n) × dispersion × décote.
+// Jamais 100 (on n'est jamais certain).
+function computeConfidence(
+  level: ProposalCalc["level"],
+  basis: "renove" | "p75" | "reference",
+  n: number,
+  pctl: { p25: number | null; median: number | null; p75: number | null },
+  decote: Decote
+): { confidence: number; confidence_reason: string } {
+  const BASE: Record<ProposalCalc["level"], number> = {
+    quartier_renove: 95, quartier_p75: 80, vdl: 60, cluster: 60, ville: 40,
+  };
+  const base = BASE[level] ?? 50;
+
+  let fN = 1;
+  if (basis !== "reference") {
+    const nCible = basis === "renove" ? 8 : 20;
+    fN = Math.max(0.6, Math.min(1, 0.6 + 0.4 * Math.min(1, n / nCible)));
+  }
+
+  let fDisp = 1;
+  if (pctl.median && pctl.p25 != null && pctl.p75 != null && pctl.median > 0) {
+    const spread = (pctl.p75 - pctl.p25) / pctl.median;
+    fDisp = Math.max(0.7, Math.min(1, 1 - Math.max(0, spread - 0.15) * 0.8));
+  }
+
+  const fDecote = decote.source === "computed" ? 1 : 0.85;
+  const confidence = Math.round(Math.max(0, Math.min(100, base * fN * fDisp * fDecote)));
+
+  const levelLabel =
+    level === "quartier_renove" ? "médiane rénové"
+    : level === "quartier_p75" ? "P75 quartier"
+    : level === "vdl" ? "référence VdL"
+    : level === "cluster" ? `cluster (${basis === "renove" ? "médiane rénové" : "P75"})`
+    : "P75 ville";
+  const parts = [levelLabel];
+  if (basis !== "reference") parts.push(`${n} comps`);
+  if (fDisp < 0.95) parts.push("dispersion large");
+  if (fDecote < 1) parts.push("décote fallback");
+  return { confidence, confidence_reason: parts.join(" · ") };
+}
 
 /** Calcule la proposition d'un quartier (ou null si aucun comp exploitable). */
 export function computeQuartier(
@@ -151,10 +195,13 @@ export function computeQuartier(
     `${cibleLabel} = ${fmtEur(cible)} €/m² × (1 − ${Math.round(decote.decote * 1000) / 10} %` +
     `${decote.source === "fallback" ? " fallback" : ""}) = ${fmtEur(cible * (1 - decote.decote))} → arrondi ${fmtEur(proposed)} €/m²`;
 
+  const conf = computeConfidence(level, basis, used.length, percentiles, decote);
+
   const calc: ProposalCalc = {
     level, basis, n_used: used.length, cible_eur_m2: Math.round(cible),
     percentiles, decote, proposed_eur_m2: proposed, current_eur_m2: current,
     vdl_ref: announcedRef,
+    confidence: conf.confidence, confidence_reason: conf.confidence_reason,
     formula, comps: used.map(compDetail), generated_at: new Date().toISOString(),
   };
   return { proposed, calc };
