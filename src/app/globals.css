@@ -471,16 +471,17 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .q-row .q-name strong { font-weight: 600; }
 .q-row .q-input { width: 100%; }
 .q-row .q-action { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.q-row .q-btns { display: flex; gap: 8px; }
 .q-row .q-detail { grid-column: 1 / -1; }
 .conf-chip { font-size: 0.7rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
 
 .comp-row {
-  display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center; gap: 10px;
+  display: grid; grid-template-columns: max-content minmax(0, 1fr) auto;
+  align-items: baseline; gap: 10px;
   padding: 6px 0; border-bottom: 1px solid var(--line);
 }
-.comp-row .cm-price { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
-.comp-row .cm-meta { font-size: 0.8rem; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.comp-row .cm-price { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.comp-row .cm-meta { font-size: 0.85rem; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .comp-row .cm-link { font-size: 0.85rem; white-space: nowrap; }
 
 /* Bloc méthode (tuto) intégré, pas un cadre isolé */

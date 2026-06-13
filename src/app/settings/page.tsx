@@ -36,6 +36,7 @@ type Proposal = {
 const eur = (n: number) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " €";
 const pct = (v: number) => `${Math.round(v * 1000) / 10} %`;
 const ETAT_LABEL: Record<string, string> = { a_renover: "à rénover", habitable: "habitable", renove: "rénové" };
+const ETAT_CODE: Record<string, string> = { a_renover: "A", habitable: "H", renove: "R" };
 
 // Badge de confiance : ≥80 Élevée · 60–79 Bonne · 45–59 Modérée · <45 Faible.
 function confBadge(score: number): { label: string; bg: string; fg: string } {
@@ -128,8 +129,7 @@ function ProposalDetail({ c }: { c: Calc }) {
               <span className="cm-price">{eur(cp.price_m2)}/m²</span>
               <span className="cm-meta">
                 {cp.surface} m² · CPE {cp.cpe || "—"}
-                {cp.etat ? ` · ${ETAT_LABEL[cp.etat] ?? cp.etat}` : ""}
-                {cp.etat && cp.etat_confidence != null ? ` ${Math.round(cp.etat_confidence * 100)}%` : ""}
+                {cp.etat ? ` · ${ETAT_CODE[cp.etat] ?? "?"}${cp.etat_confidence != null ? ` (${Math.round(cp.etat_confidence * 100)}%)` : ""}` : ""}
               </span>
               {cp.url
                 ? <a className="cm-link" href={cp.url} target="_blank" rel="noreferrer">annonce ↗</a>
@@ -151,7 +151,7 @@ function MethodHelp() {
         <li>
           <dfn>Comparables</dfn> — les annonces atHome ressemblant à une cible d'investissement :
           appartement ancien, CPE C à F, 30 à 70 m², sur les 12 dernières semaines, dédoublonnées.
-          L'IA lit chaque annonce et la classe en <em>rénové</em>, <em>habitable</em> ou <em>à rénover</em>.
+          Chacune est classée par IA (voir plus bas).
         </li>
         <li>
           <dfn>Prix affiché cible</dfn> — le prix de revente visé, au m². On prend le premier niveau
@@ -173,6 +173,23 @@ function MethodHelp() {
           La saisie manuelle reste toujours prioritaire : rien n'est appliqué sans ton clic.
         </li>
       </ol>
+
+      <h4>Le classement par IA (R / H / A)</h4>
+      <p style={{ margin: "0 0 6px" }}>
+        Le titre et la description de chaque annonce sont envoyés à un modèle de langage
+        (Claude Haiku) qui juge l'état du bien et le range dans une catégorie, avec un
+        pourcentage de confiance dans son verdict. C'est ce code qui apparaît dans la liste
+        des comparables, ex. <code>H (90 %)</code> = jugé habitable, confiance 90 %.
+      </p>
+      <ul>
+        <li><dfn>R</dfn> — rénové : refait à neuf, prêt à revendre au prix haut.</li>
+        <li><dfn>H</dfn> — habitable : correct, sans gros travaux, mais pas rénové récemment.</li>
+        <li><dfn>A</dfn> — à rénover : travaux nécessaires.</li>
+      </ul>
+      <p className="pd-sub" style={{ margin: "0 0 4px" }}>
+        Ce classement sert à viser la médiane des seuls biens rénovés quand on en a assez (≥ 8) :
+        on se compare à des biens dans l'état où on revendra, pas à des biens à retaper.
+      </p>
 
       <h4>Note de confiance</h4>
       <p style={{ margin: "0 0 6px" }}>
@@ -348,8 +365,10 @@ export default function SettingsPage() {
                       {cb && (
                         <span className="conf-chip" style={{ background: cb.bg, color: cb.fg }}>{score}% · {cb.label}</span>
                       )}
-                      <button className="btn green" onClick={() => decide(prop, "accept")}>Appliquer</button>
-                      <button className="btn ghost" onClick={() => decide(prop, "dismiss")}>Ignorer</button>
+                      <div className="q-btns">
+                        <button className="btn green" onClick={() => decide(prop, "accept")}>Appliquer</button>
+                        <button className="btn ghost" onClick={() => decide(prop, "dismiss")}>Ignorer</button>
+                      </div>
                     </div>
                   ) : (
                     <div className="q-action"><span className="muted" style={{ fontSize: "0.82rem" }}>Pas de proposition</span></div>
