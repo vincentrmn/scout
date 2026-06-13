@@ -30,7 +30,8 @@ type Calc = {
 };
 type Proposal = {
   id: number; quartier_slug: string; proposed_eur_m2: number;
-  current_eur_m2: number | null; calc: Calc; created_at: string;
+  current_eur_m2: number | null; calc: Calc; status: "pending" | "accepted";
+  created_at: string; decided_at?: string | null;
 };
 
 const eur = (n: number) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " €";
@@ -48,7 +49,7 @@ function confBadge(score: number): { label: string; bg: string; fg: string } {
 
 // Phrase décrivant le niveau retenu (médiane rénové / P75 quartier / cluster / ville / réf VdL).
 function methodLine(c: Calc): string {
-  if (c.basis === "reference") return "Référence officielle Ville de Luxembourg 2025";
+  if (c.basis === "reference") return "Référence Observatoire de l'Habitat (par quartier, 2025)";
   const n = `${c.n_used} comparable${c.n_used > 1 ? "s" : ""}`;
   if (c.basis === "renove") return `Médiane des biens rénovés · ${n}`;
   if (c.level === "ville") return `P75 ville (repli, faute de comps locaux) · ${n}`;
@@ -111,7 +112,7 @@ function ProposalDetail({ c }: { c: Calc }) {
         </dd>
         {c.vdl_ref != null && (
           <>
-            <dt>Réf. VdL 2025</dt><dd>{eur(c.vdl_ref)}/m²</dd>
+            <dt>Réf. Observatoire</dt><dd>{eur(c.vdl_ref)}/m²</dd>
           </>
         )}
         <dt>Confiance</dt>
@@ -132,7 +133,7 @@ function ProposalDetail({ c }: { c: Calc }) {
                 {cp.etat ? ` · ${ETAT_CODE[cp.etat] ?? "?"}${cp.etat_confidence != null ? ` (${Math.round(cp.etat_confidence * 100)}%)` : ""}` : ""}
               </span>
               {cp.url
-                ? <a className="cm-link" href={cp.url} target="_blank" rel="noreferrer">annonce ↗</a>
+                ? <a className="cm-link" href={cp.url} target="_blank" rel="noreferrer" title="Voir l'annonce" aria-label="Voir l'annonce">↗</a>
                 : <span className="cm-link muted">—</span>}
             </div>
           ))}
@@ -159,9 +160,9 @@ function MethodHelp() {
           <ul>
             <li><dfn>Médiane des rénovés</dfn> dès qu'on a ≥ 8 biens rénovés dans le quartier — le cœur du marché rénové.</li>
             <li><dfn>P75 du quartier</dfn> sinon, dès ≥ 12 comparables — le 75ᵉ centile, c.-à-d. le haut du marché (¾ des biens sont en dessous).</li>
-            <li><dfn>Référence VdL</dfn> sinon — la moyenne officielle publiée par la Ville de Luxembourg pour ce quartier.</li>
+            <li><dfn>Référence Observatoire</dfn> sinon — le prix annoncé par quartier publié par l'Observatoire de l'Habitat (chiffre officiel, par quartier de la Ville de Luxembourg).</li>
             <li><dfn>Cluster</dfn> sinon — un groupe de quartiers voisins comparables, dont on mutualise les comps quand le quartier seul en manque.</li>
-            <li><dfn>P75 ville</dfn> en tout dernier recours — calculé sur nos annonces, toute la ville confondue. À distinguer de la <em>Référence VdL</em> (chiffre officiel) : ici c'est notre propre P75 issu du scraping.</li>
+            <li><dfn>P75 ville</dfn> en tout dernier recours — calculé sur nos annonces, toute la ville confondue. À distinguer de la <em>Référence Observatoire</em> (chiffre officiel par quartier) : ici c'est notre propre P75 issu du scraping, toute la ville.</li>
           </ul>
         </li>
         <li>
@@ -197,7 +198,7 @@ function MethodHelp() {
         × <strong>dispersion</strong> (étalement des €/m²) × <strong>décote</strong> (mesurée ou repli).
       </p>
       <ul>
-        <li><dfn>base</dfn> : médiane rénové 95 · P75 quartier 80 · réf VdL / cluster 60 · ville 40</li>
+        <li><dfn>base</dfn> : médiane rénové 95 · P75 quartier 80 · réf Observatoire / cluster 60 · ville 40</li>
         <li><dfn>taille</dfn> : abaisse le score quand il y a peu de comparables</li>
         <li><dfn>dispersion</dfn> : abaisse le score quand les prix sont très étalés</li>
         <li><dfn>décote</dfn> : ×1 si mesurée, ×0,85 si repli prudent</li>
@@ -261,6 +262,7 @@ export default function SettingsPage() {
   }, [proposals]);
 
   const period = proposals[0]?.calc?.decote?.period ?? null;
+  const pendingCount = useMemo(() => proposals.filter((p) => p.status === "pending").length, [proposals]);
 
   const defaultPrice = useMemo(() => {
     const city = tree[0];
@@ -294,8 +296,13 @@ export default function SettingsPage() {
 
   async function decide(p: Proposal, action: "accept" | "dismiss") {
     await fetch("/api/proposals", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: p.id, action }) }).catch(() => {});
-    if (action === "accept") setVals((v) => ({ ...v, [p.quartier_slug]: String(p.proposed_eur_m2) }));
-    setProposals((prev) => prev.filter((x) => x.id !== p.id));
+    if (action === "accept") {
+      // On garde la proposition (statut « appliqué ») pour conserver le détail.
+      setVals((v) => ({ ...v, [p.quartier_slug]: String(p.proposed_eur_m2) }));
+      setProposals((prev) => prev.map((x) => (x.id === p.id ? { ...x, status: "accepted" } : x)));
+    } else {
+      setProposals((prev) => prev.filter((x) => x.id !== p.id));
+    }
   }
 
   return (
@@ -324,9 +331,9 @@ export default function SettingsPage() {
         {showHelp && <MethodHelp />}
       </div>
 
-      {proposals.length > 0 && (
+      {pendingCount > 0 && (
         <div className="card" style={{ marginTop: 14, borderColor: "var(--green)", background: "var(--green-soft)" }}>
-          <strong>{proposals.length} proposition{proposals.length > 1 ? "s" : ""} de mise à jour</strong>
+          <strong>{pendingCount} proposition{pendingCount > 1 ? "s" : ""} de mise à jour</strong>
           {period && <span className="muted"> (données Observatoire {period})</span>} — à valider quartier par quartier ci-dessous.
         </div>
       )}
@@ -365,10 +372,14 @@ export default function SettingsPage() {
                       {cb && (
                         <span className="conf-chip" style={{ background: cb.bg, color: cb.fg }}>{score}% · {cb.label}</span>
                       )}
-                      <div className="q-btns">
-                        <button className="btn green" onClick={() => decide(prop, "accept")}>Appliquer</button>
-                        <button className="btn ghost" onClick={() => decide(prop, "dismiss")}>Ignorer</button>
-                      </div>
+                      {prop.status === "accepted" ? (
+                        <span className="muted" style={{ fontSize: "0.82rem", fontWeight: 600 }}>✓ Appliqué</span>
+                      ) : (
+                        <div className="q-btns">
+                          <button className="btn green" onClick={() => decide(prop, "accept")}>Appliquer</button>
+                          <button className="btn ghost" onClick={() => decide(prop, "dismiss")}>Ignorer</button>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="q-action"><span className="muted" style={{ fontSize: "0.82rem" }}>Pas de proposition</span></div>

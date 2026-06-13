@@ -482,7 +482,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 }
 .comp-row .cm-price { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .comp-row .cm-meta { font-size: 0.85rem; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.comp-row .cm-link { font-size: 0.85rem; white-space: nowrap; }
+.comp-row .cm-link { font-size: 1.05rem; line-height: 1; white-space: nowrap; }
+.comp-row a.cm-link { color: var(--green); font-weight: 700; }
 
 /* Bloc méthode (tuto) intégré, pas un cadre isolé */
 .method-help { margin-top: 12px; font-size: 0.9rem; line-height: 1.55; }

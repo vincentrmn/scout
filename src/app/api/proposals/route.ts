@@ -4,15 +4,19 @@ import { pool, ensureSchema } from "@/lib/db";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// GET /api/proposals — propositions en attente (avec le détail du calcul).
+// GET /api/proposals — une ligne par quartier : la proposition en attente si
+// elle existe, sinon la dernière appliquée (pour garder le détail consultable).
 export async function GET() {
   try {
     await ensureSchema();
     const { rows } = await pool.query(
-      `SELECT id, quartier_slug, proposed_eur_m2, current_eur_m2, calc, created_at
+      `SELECT DISTINCT ON (quartier_slug)
+         id, quartier_slug, proposed_eur_m2, current_eur_m2, calc, status, created_at, decided_at
        FROM price_proposals
-       WHERE status = 'pending'
-       ORDER BY quartier_slug`
+       WHERE status IN ('pending', 'accepted')
+       ORDER BY quartier_slug,
+         (status = 'pending') DESC,
+         COALESCE(decided_at, created_at) DESC`
     );
     return NextResponse.json(rows);
   } catch (err) {
