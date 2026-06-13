@@ -20,6 +20,11 @@ export type Criteria = {
   priceMax?: number;
   /** Classes CPE a conserver. [] (defaut) => aucun filtre CPE ni `energy_class` URL. */
   cpeClasses: string[];
+  /** S13 — quand on filtre par classes CPE, conserver AUSSI les biens sans note
+   *  de CPE (« en cours d'élaboration »). true => n8n n'ajoute PAS `energy_class`
+   *  à l'URL (scrape toutes les notes) et garde `CPE ∈ classes OU CPE vide`.
+   *  Sans effet si cpeClasses = [] (déjà tout inclus). */
+  includeNoCpe?: boolean;
 };
 
 export type ConfigRow = {

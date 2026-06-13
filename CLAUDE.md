@@ -48,13 +48,14 @@ Dernière mise à jour : 12/06/2026.
 
 ### Scraper (`zoFcSerIzOatlKTM`) — 5 nodes
 `Webhook depuis app` → `Scrape SRP (toutes pages)` (Code, pagination MAX_PAGES=50, délai 700 ms, extraction `__INITIAL_STATE__`, filtres vendu/neuf, **collectPhotos**) → `GET fiche detail` (1 req/2,5 s) → `Extrait CPE + filtre` → `Agrege resultats` → `POST vers app` (`/api/ingest`).
+- **S13 `includeNoCpe`** : si `criteria.includeNoCpe` est vrai, `pickEnergy()` retourne null → **pas de `energy_class` dans l'URL SRP**, donc atHome renvoie aussi les biens sans note de CPE. Le nœud `Extrait CPE + filtre` garde déjà `CPE ∈ classes OU CPE vide`, donc rien d'autre à changer. Tradeoff : scrape toutes les notes puis filtre (plus lent).
 
 ### Photos — le pattern atHome (vérifié le 11/06)
 - `a.media` dans `state.search.list[]` est une **STRING JSON** : `{"items":[{"type":"photo","uri":"/44/a8/98/xxx.jpg","order":n}]}` — il faut `JSON.parse`.
 - URIs **relatives**. URL complète = `https://i1.static.athome.eu/images/annonces2/image_` + uri (segment littéral `image_`, vérifié sur la fiche détail). Max 6 photos/bien, triées par `order`, filtrées `type === 'photo'`.
 
 ### Pratiques MCP n8n (IMPORTANT, a changé le 11/06)
-- ⚠️ **`update_workflow` est cassé** depuis la montée de version n8n : il exige un paramètre `operations` (array) au lieu du code SDK. **Contournement éprouvé** : `validate_workflow` → `create_workflow_from_code` (nouveau workflow, même webhook path) → `unpublish_workflow` (ancien) → `publish_workflow` (nouveau). Le path porte l'URL, donc `N8N_WEBHOOK_URL` reste valable. *(Le schéma MCP peut re-changer — retester `update_workflow` avant de conclure.)*
+- ✅ **`update_workflow` fonctionne** (vérifié 13/06) avec un tableau `operations`. Pour patcher un nœud Code : `setNodeParameter(nodeName, path:"/jsCode", value: <code complet>)`. ⚠️ **Ça modifie le DRAFT** : il faut ensuite **`publish_workflow(workflowId)`** pour basculer la version active (sinon le webhook continue d'exécuter l'ancien code publié). Vérifier `activeVersionId` avant/après. *(L'ancien contournement `create_workflow_from_code` + unpublish/publish reste valable si `update_workflow` recasse.)*
 - `executionMode: "manual"` exécute le **draft** ; `"production"` la version **publiée**. Tester en manual avant de basculer.
 - Diagnostic : `get_execution(includeData: true, nodeNames: [...], truncateData: 1-2)`.
 - Pour inspecter un shape inconnu (ex. JSON atHome) : créer un **workflow jetable** manualTrigger + Code plutôt que toucher au scraper.
