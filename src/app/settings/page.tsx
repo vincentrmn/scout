@@ -374,10 +374,13 @@ export default function SettingsPage() {
               const score = prop.calc?.confidence;
               const cb = score != null ? confBadge(score) : null;
               return (
-                <div style={{ marginTop: 12, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
-                  <div className="q-action">
+                <div style={{ marginTop: 12, borderTop: "1px solid var(--line)", paddingTop: 12, display: "grid", gap: 8 }}>
+                  <div className="q-name">
                     <button className={`expand-btn ${isOpen ? "open" : ""}`} title="Détail du calcul" onClick={() => setOpen((o) => ({ ...o, [city.id]: !o[city.id] }))}>▸</button>
-                    <span className="mono" style={{ fontWeight: 600 }}>Proposition ville : {eur(prop.proposed_eur_m2)}/m²</span>
+                    <strong>Proposition ville</strong>
+                  </div>
+                  <div className="q-action">
+                    <span className="mono" style={{ fontWeight: 600 }}>→ {eur(prop.proposed_eur_m2)}/m²</span>
                     {cb && <span className="conf-chip" style={{ background: cb.bg, color: cb.fg }}>{score}% · {cb.label}</span>}
                     {prop.status === "accepted" ? (
                       <span className="muted" style={{ fontSize: "0.82rem", fontWeight: 600 }}>✓ Appliqué</span>
