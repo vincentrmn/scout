@@ -347,6 +347,19 @@ export function ensureSchema(): Promise<void> {
       // S14 — état de rénovation lu directement chez immotop (ga4Condition) :
       // 'a_renover' | 'habitable' | 'renove'. NULL pour atHome (pas de donnée).
       await pool.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS etat TEXT;`);
+
+      // -------------------------------------------------------------------
+      // S15 — Vélocité de marché : capture des biens passés « vendus » (signal
+      // explicite isSoldProperty d'atHome, jeté jusqu'ici au scraping) pour
+      // mesurer durée de vente + décote affiché→vente par quartier.
+      //   market_status = 'active' | 'sold'
+      //   sold_at  = 1re fois où on voit le bien marqué vendu (figé)
+      //   sold_price = prix au moment de la vente
+      // -------------------------------------------------------------------
+      await pool.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS market_status TEXT NOT NULL DEFAULT 'active';`);
+      await pool.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS sold_at TIMESTAMPTZ;`);
+      await pool.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS sold_price INTEGER;`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS listings_sold_idx ON listings (sold_at DESC) WHERE market_status = 'sold';`);
       // Run du scraper immotop (parallèle au survey ; n'alimente pas les runs atHome).
       await pool.query(`ALTER TABLE runs ADD COLUMN IF NOT EXISTS is_immotop BOOLEAN NOT NULL DEFAULT false;`);
       // S14 — recherche multi-sources : nb de sources dont on attend encore le POST.

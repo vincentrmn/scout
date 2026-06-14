@@ -154,6 +154,7 @@ export default function Dashboard() {
             links={[
               { href: "/nouveautes", label: "✨ Nouveautés" },
               { href: "/tracked", label: "★ Suivis", badge: hasNewActivity },
+              { href: "/marche", label: "📊 Marché" },
               { href: "/settings", label: "⚙ Prix de revente", badge: hasProposals },
             ]}
           />
