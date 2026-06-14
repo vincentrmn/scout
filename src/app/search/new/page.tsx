@@ -246,16 +246,16 @@ export default function NewSearch() {
 
                 {hasImmotop && (
                   <div style={{ marginTop: hasAthome ? 22 : 0, paddingTop: hasAthome ? 18 : 0, borderTop: hasAthome ? "1px solid var(--line)" : "none" }}>
-                    <label>Énergie · Immotop</label>
+                    <label>Classes énergétiques · Immotop</label>
                     <select value={immotopEnergy} onChange={(e) => setImmotopEnergy(e.target.value as any)}>
                       <option value="">Toutes</option>
-                      <option value="excellente">Excellente</option>
-                      <option value="moyenne">Moyenne</option>
-                      <option value="basse">Basse</option>
+                      <option value="excellente">Excellente — A à C</option>
+                      <option value="moyenne">Moyenne — jusqu'à F (A–F)</option>
+                      <option value="basse">Basse — toutes notées (A–I)</option>
                     </select>
                     <p className="zone-picker__hint" style={{ marginTop: 6 }}>
-                      Immotop ne donne pas la classe CPE exacte : seulement 3 bandes <strong>cumulatives</strong>
-                      (« cette qualité et mieux »). Indicatif, moins précis que le CPE d'atHome.
+                      Immotop ne propose que ces 3 paliers <strong>cumulatifs</strong> (« cette qualité et mieux »),
+                      pas la classe exacte comme atHome. Pour cibler les biens à rénover, le filtre « État » ci-dessous est plus précis.
                     </p>
 
                     <label style={{ marginTop: 16 }}>État du bien · Immotop</label>
