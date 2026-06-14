@@ -142,14 +142,12 @@ export default function NewSearch() {
         <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex : F+ < 50m² Luxembourg-ville" />
 
         <div className="zone-picker__toggle-row" style={{ marginTop: 18, borderBottom: "none", paddingBottom: 0, marginBottom: 0 }}>
-          <Toggle checked={includeNew} onChange={setIncludeNew} />
-          <span className="zone-picker__toggle-label">
-            {includeNew ? "Tous les biens (neuf inclus)" : "Bien existant uniquement"}
-          </span>
+          <Toggle checked={!includeNew} onChange={(v) => setIncludeNew(!v)} />
+          <span className="zone-picker__toggle-label">Bien existant uniquement</span>
         </div>
         {includeNew && (
           <p className="zone-picker__hint" style={{ marginTop: 6 }}>
-            Inclut les programmes neufs en construction. Sans filtre CPE côté atHome, une recherche large peut être plus lente.
+            Désactivé : les programmes neufs en construction sont aussi inclus. Sans filtre CPE côté atHome, une recherche large peut être plus lente.
           </p>
         )}
 
