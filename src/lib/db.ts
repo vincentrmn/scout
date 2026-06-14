@@ -346,6 +346,11 @@ export function ensureSchema(): Promise<void> {
       await pool.query(`ALTER TABLE market_samples ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'athome';`);
       // Run du scraper immotop (parallèle au survey ; n'alimente pas les runs atHome).
       await pool.query(`ALTER TABLE runs ADD COLUMN IF NOT EXISTS is_immotop BOOLEAN NOT NULL DEFAULT false;`);
+      // S14 — recherche multi-sources : nb de sources dont on attend encore le POST.
+      //   NULL  => run mono-source historique (atHome) : finalisé au 1er POST (inchangé).
+      //   >=1   => run multi-sources : chaque POST fusionne ses biens + décrémente ;
+      //            le run passe 'done' quand le compteur atteint 0.
+      await pool.query(`ALTER TABLE runs ADD COLUMN IF NOT EXISTS sources_pending INTEGER;`);
     })();
   }
   return global._bbinvestSchema;

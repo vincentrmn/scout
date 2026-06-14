@@ -184,4 +184,17 @@ N8N_IMMOTOP_WEBHOOK_URL = https://n8n-production-8929d.up.railway.app/webhook/sc
 ```
 Tant qu'elle est absente, immotop est **désactivé** (no-op) et atHome tourne normalement.
 
-**Suite possible** : extraire le CPE depuis la description (« Isolation thermique: X » vu dans les annonces) ; badge source aussi sur la carte / les résultats ; cadence (aujourd'hui quotidienne via la veille).
+**Suite possible** : extraire le CPE depuis la description (« Isolation thermique: X » vu dans les annonces) ; badge source aussi sur la carte ; cadence (aujourd'hui quotidienne via la veille).
+
+## 9. Recherche manuelle multi-sources (S14, complément)
+
+Le formulaire de recherche permet désormais de choisir les **sources** (atHome / immotop / les deux). Une recherche lance les scrapers choisis sur **le même run**, et les résultats sont **fusionnés + dédupliqués + tagués source** (`atHome` / `immotop` / `atHome + immotop`).
+
+- `Criteria.sources` (`['athome','immotop']` par défaut). immotop n'est tenté que si `N8N_IMMOTOP_WEBHOOK_URL` est configuré, sinon ignoré (atHome seul).
+- `runs.sources_pending` : compteur de sources attendues. NULL = run mono-source historique (atHome, veille, anciennes configs) → **comportement strictement inchangé**, finalisé au 1er POST.
+- Le scraper immotop est généralisé : filtres quartier (`quartierSlugs`), type (appart/maison), neuf, prix, surface ; il POSTe avec `source:'immotop'` vers l'`ingestUrl` fourni (`/api/ingest` pour la recherche, `/api/ingest-immotop` pour la veille).
+- Workflow n8n actif : `BBIscout — immotop scraper` (`mujtQeVNtxpTevor`), webhook `scout-immotop`.
+- `/api/ingest` est rendu source-aware : id immotop préfixé (`immotop-<id>`), fusion dans une transaction à verrou de ligne (sérialise les POST atHome/immotop concurrents), `stats` du panneau d'exclusions écrites par le seul POST atHome.
+- Badge source : page de résultats + Suivis.
+
+**Limite connue v1** : la dédup *référentielle* (table `listings`) reste portée par `/api/ingest-immotop` (veille). Dans un run de recherche manuel, un bien présent sur les deux portails est fusionné **dans les résultats** (1 ligne, source `both`), mais peut exister en double dans `listings` (1 ligne atHome + 1 ligne `immotop-…`). Invisible à l'usage (le suivi épingle le primaire atHome). À unifier si besoin.

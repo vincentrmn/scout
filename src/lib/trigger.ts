@@ -22,70 +22,97 @@ export async function triggerRun(
   if (!cfg.rows.length) return { ok: false, status: 404, error: "config introuvable" };
   const config = cfg.rows[0];
 
-  const run = await pool.query(
-    `INSERT INTO runs (config_id, config_name, status, is_watch, scoring)
-     VALUES ($1, $2, 'running', $3, $4) RETURNING id`,
-    [config.id, config.name, opts.isWatch ?? false, JSON.stringify(config.scoring ?? null)]
-  );
-  const runId = run.rows[0].id as number;
-
-  const webhook = process.env.N8N_WEBHOOK_URL;
-  if (!webhook) {
-    await pool.query(`UPDATE runs SET status='error', error=$2, finished_at=now() WHERE id=$1`, [
-      runId,
-      "N8N_WEBHOOK_URL non configure",
-    ]);
-    return { ok: false, status: 500, error: "N8N_WEBHOOK_URL non configure", runId };
-  }
-
-  // S2.1 — Enrichissement des qTokens depuis la table zones (alignes sur locCodes).
+  // S2.1 — qTokens (atHome) + S14 quartierSlugs (immotop), alignés sur locCodes.
   const criteria = { ...(config.criteria || {}) };
   const locCodes: string[] = Array.isArray(criteria.locCodes) ? criteria.locCodes : [];
+  let atHomeGeoOk = true;
+  let quartierSlugs: string[] = [];
   if (locCodes.length) {
-    const zonesRes = await pool.query<{ loc_code: string; q_code: string | null }>(
-      `SELECT loc_code, q_code FROM zones WHERE loc_code = ANY($1::text[])`,
+    const zonesRes = await pool.query<{ id: string; parent_id: string | null; loc_code: string; q_code: string | null }>(
+      `SELECT id, parent_id, loc_code, q_code FROM zones WHERE loc_code = ANY($1::text[])`,
       [locCodes]
     );
-    const qByLoc = new Map(zonesRes.rows.map((r) => [r.loc_code, r.q_code]));
-    const aligned = locCodes
-      .map((lc) => ({ locCode: lc, qCode: qByLoc.get(lc) ?? null }))
-      .filter((p) => p.qCode);
-
-    criteria.locCodes = aligned.map((p) => p.locCode);
-    criteria.qTokens = aligned.map((p) => p.qCode as string);
-
-    if (aligned.length === 0) {
-      await pool.query(`UPDATE runs SET status='error', error=$2, finished_at=now() WHERE id=$1`, [
-        runId,
-        "Aucune zone selectionnee n'a de q_code configure en base.",
-      ]);
-      return {
-        ok: false,
-        status: 400,
-        error: "Aucune zone selectionnee n'a de q_code configure en base.",
-        runId,
-      };
-    }
+    const byLoc = new Map(zonesRes.rows.map((r) => [r.loc_code, r]));
+    const aligned = locCodes.map((lc) => byLoc.get(lc)).filter((z): z is NonNullable<typeof z> => !!z && !!z.q_code);
+    criteria.locCodes = aligned.map((z) => z.loc_code);
+    criteria.qTokens = aligned.map((z) => z.q_code as string);
+    atHomeGeoOk = aligned.length > 0;
+    // immotop : une zone « ville entière » (parent_id null) => pas de filtre quartier ;
+    // sinon on garde les ids de quartier (= slugs immotop).
+    const wholeCity = zonesRes.rows.some((z) => z.parent_id === null);
+    quartierSlugs = wholeCity ? [] : zonesRes.rows.filter((z) => z.parent_id !== null).map((z) => z.id);
   }
 
-  const payload = {
-    runId,
-    criteria,
-    ingestUrl: `${opts.base}/api/ingest`,
-    ingestSecret: process.env.INGEST_SECRET || "",
-  };
+  // S14 — sources demandées (défaut atHome) filtrées par disponibilité réelle.
+  const wanted: string[] =
+    Array.isArray(criteria.sources) && criteria.sources.length ? criteria.sources : ["athome"];
+  const athomeWebhook = process.env.N8N_WEBHOOK_URL;
+  const immotopWebhook = process.env.N8N_IMMOTOP_WEBHOOK_URL;
+  const fire: ("athome" | "immotop")[] = [];
+  if (wanted.includes("athome") && athomeWebhook && atHomeGeoOk) fire.push("athome");
+  if (wanted.includes("immotop") && immotopWebhook) fire.push("immotop");
 
-  // Fire-and-forget : on ne bloque pas pendant le scraping.
-  fetch(webhook, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(payload),
-  }).catch(async (e) => {
-    await pool.query(`UPDATE runs SET status='error', error=$2, finished_at=now() WHERE id=$1`, [
-      runId,
-      String(e),
-    ]);
-  });
+  if (fire.length === 0) {
+    const reason =
+      wanted.includes("athome") && !athomeWebhook
+        ? "N8N_WEBHOOK_URL non configuré"
+        : wanted.includes("athome") && !atHomeGeoOk
+        ? "Aucune zone sélectionnée n'a de q_code configuré en base."
+        : wanted.includes("immotop") && !immotopWebhook
+        ? "immotop sélectionné mais N8N_IMMOTOP_WEBHOOK_URL non configuré."
+        : "Aucune source de scraping disponible.";
+    return { ok: false, status: 400, error: reason };
+  }
+
+  const run = await pool.query(
+    `INSERT INTO runs (config_id, config_name, status, is_watch, scoring, sources_pending)
+     VALUES ($1, $2, 'running', $3, $4, $5) RETURNING id`,
+    [config.id, config.name, opts.isWatch ?? false, JSON.stringify(config.scoring ?? null), fire.length]
+  );
+  const runId = run.rows[0].id as number;
+  const ingestSecret = process.env.INGEST_SECRET || "";
+
+  // atHome : son échec d'envoi reste fatal pour le run (source principale).
+  if (fire.includes("athome")) {
+    fetch(athomeWebhook!, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ runId, criteria, ingestUrl: `${opts.base}/api/ingest`, ingestSecret }),
+    }).catch(async (e) => {
+      await pool.query(`UPDATE runs SET status='error', error=$2, finished_at=now() WHERE id=$1`, [runId, String(e)]);
+    });
+  }
+
+  // immotop : best-effort. Un échec d'envoi décrémente le compteur (le run se
+  // termine alors avec les seuls résultats atHome) — il ne casse jamais le run.
+  if (fire.includes("immotop")) {
+    const imCriteria = {
+      propertyType: criteria.propertyType,
+      includeNew: criteria.includeNew,
+      surfaceMin: criteria.surfaceMin,
+      surfaceMax: criteria.surfaceMax,
+      priceMin: criteria.priceMin,
+      priceMax: criteria.priceMax,
+      quartierSlugs,
+      maxPages: 50,
+    };
+    fetch(immotopWebhook!, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ runId, criteria: imCriteria, source: "immotop", ingestUrl: `${opts.base}/api/ingest`, ingestSecret }),
+    }).catch(async () => {
+      await pool
+        .query(
+          `UPDATE runs SET
+             sources_pending = GREATEST(COALESCE(sources_pending,1) - 1, 0),
+             status = CASE WHEN GREATEST(COALESCE(sources_pending,1) - 1, 0) = 0 AND status='running' THEN 'done' ELSE status END,
+             finished_at = CASE WHEN GREATEST(COALESCE(sources_pending,1) - 1, 0) = 0 AND status='running' THEN now() ELSE finished_at END
+           WHERE id=$1`,
+          [runId]
+        )
+        .catch(() => {});
+    });
+  }
 
   return { ok: true, runId };
 }

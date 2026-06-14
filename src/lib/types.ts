@@ -25,6 +25,10 @@ export type Criteria = {
    *  à l'URL (scrape toutes les notes) et garde `CPE ∈ classes OU CPE vide`.
    *  Sans effet si cpeClasses = [] (déjà tout inclus). */
   includeNoCpe?: boolean;
+  /** S14 — sources de scraping à interroger pour cette recherche.
+   *  Absent / vide => ['athome'] (rétro-compat). 'immotop' n'est tenté que si
+   *  N8N_IMMOTOP_WEBHOOK_URL est configuré (sinon ignoré silencieusement). */
+  sources?: ("athome" | "immotop")[];
 };
 
 export type ConfigRow = {

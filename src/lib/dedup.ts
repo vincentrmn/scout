@@ -50,7 +50,7 @@ export function haversineMeters(
 }
 
 /** True si `c` et `t` satisfont les trois tolérances (géo + surface + prix). */
-export function isSameProperty(c: DedupCandidate, t: DedupTarget): boolean {
+export function isSameProperty(c: DedupTarget, t: DedupTarget): boolean {
   if (c.price == null || t.price == null || c.surface == null || t.surface == null) return false;
   const dist = haversineMeters(c.lat, c.lng, t.lat, t.lng);
   if (dist == null || dist > DEDUP_MAX_DISTANCE_M) return false;
