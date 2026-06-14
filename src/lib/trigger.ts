@@ -91,6 +91,9 @@ export async function triggerRun(
     const statoIds = (Array.isArray(criteria.conditions) ? criteria.conditions : [])
       .map((c: string) => STATO_BY_ETAT[c])
       .filter((v: number | undefined): v is number => typeof v === "number");
+    // S14 — bande énergie immotop (cumulative) -> id classeEnergetica.
+    const ENERGY_BY_BAND: Record<string, number> = { excellente: 1, moyenne: 5, basse: 3 };
+    const energyId = criteria.immotopEnergy ? ENERGY_BY_BAND[criteria.immotopEnergy] : undefined;
     const imCriteria = {
       propertyType: criteria.propertyType,
       includeNew: criteria.includeNew,
@@ -100,6 +103,7 @@ export async function triggerRun(
       priceMax: criteria.priceMax,
       quartierSlugs,
       statoIds,
+      energyId,
       maxPages: 50,
     };
     fetch(immotopWebhook!, {

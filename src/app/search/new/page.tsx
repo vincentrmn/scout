@@ -38,10 +38,11 @@ export default function NewSearch() {
   const [cpe, setCpe] = useState<string[]>([...CPE]);
   // S13 — quand on filtre par classes, inclure aussi les biens sans note de CPE.
   const [includeNoCpe, setIncludeNoCpe] = useState(false);
-  // S14 — sources de scraping (atHome / immotop). Les deux par défaut.
+  // S14 — sources de scraping (atHome / Immotop). Les deux par défaut.
   const [sources, setSources] = useState<("athome" | "immotop")[]>(["athome", "immotop"]);
-  // S14 — filtre d'état (immotop only). Vide = tous les états.
+  // S14 — filtres spécifiques Immotop : état (vide = tous) + bande énergie (vide = toutes).
   const [conditions, setConditions] = useState<("a_renover" | "habitable" | "renove")[]>([]);
+  const [immotopEnergy, setImmotopEnergy] = useState<"" | "excellente" | "moyenne" | "basse">("");
 
   // scoring — S4 : le prix de revente n'est plus ici (calibre par zone dans Reglages).
   const [worksEurPerM2, setWorks] = useState("1500");
@@ -52,6 +53,9 @@ export default function NewSearch() {
 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+
+  const hasAthome = sources.includes("athome");
+  const hasImmotop = sources.includes("immotop");
 
   function toggleCpe(c: string) {
     setCpe((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
@@ -81,7 +85,8 @@ export default function NewSearch() {
         // Sans objet si « Toutes les notes CPE » est actif (déjà tout inclus).
         includeNoCpe: allCpe ? false : includeNoCpe,
         sources,
-        conditions,
+        conditions: hasImmotop ? conditions : [],
+        immotopEnergy: hasImmotop && immotopEnergy ? immotopEnergy : undefined,
       },
       scoring: {
         worksEurPerM2: Number(worksEurPerM2),
@@ -94,16 +99,16 @@ export default function NewSearch() {
   }
 
   async function save(thenRun: boolean) {
+    if (sources.length === 0) {
+      setErr("Commence par choisir au moins une source (atHome et/ou Immotop).");
+      return;
+    }
     if (locCodes.length === 0) {
       setErr("Sélectionne au moins une zone (toggle « Tout » ou un ou plusieurs quartiers).");
       return;
     }
-    if (!allCpe && cpe.length === 0) {
+    if (hasAthome && !allCpe && cpe.length === 0) {
       setErr("Sélectionne au moins une note CPE, ou réactive « Toutes les notes CPE ».");
-      return;
-    }
-    if (sources.length === 0) {
-      setErr("Sélectionne au moins une source (atHome et/ou immotop).");
       return;
     }
     setBusy(true);
@@ -148,87 +153,128 @@ export default function NewSearch() {
         <label>Nom de la recherche</label>
         <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex : F+ < 50m² Luxembourg-ville" />
 
-        <div className="zone-picker__toggle-row" style={{ marginTop: 18, borderBottom: "none", paddingBottom: 0, marginBottom: 0 }}>
-          <Toggle checked={!includeNew} onChange={(v) => setIncludeNew(!v)} />
-          <span className="zone-picker__toggle-label">Bien existant uniquement</span>
-        </div>
-        {includeNew && (
-          <p className="zone-picker__hint" style={{ marginTop: 6 }}>
-            Désactivé : les programmes neufs en construction sont aussi inclus. Sans filtre CPE côté atHome, une recherche large peut être plus lente.
-          </p>
-        )}
-
-        <div className="row" style={{ marginTop: 16 }}>
-          <div>
-            <label>Type de bien</label>
-            <select value={propertyType} onChange={(e) => setPropertyType(e.target.value)}>
-              <option value="apartment">Appartement</option>
-              <option value="house">Maison</option>
-              <option value="both">Les deux</option>
-            </select>
-          </div>
-        </div>
-
-        <div style={{ marginTop: 16 }}>
+        {/* S14 — on choisit d'abord la/les source(s) ; le reste du formulaire apparaît ensuite. */}
+        <div style={{ marginTop: 18 }}>
           <label>Sources</label>
           <div className="chips">
-            <span className={`chip ${sources.includes("athome") ? "on" : ""}`} onClick={() => toggleSource("athome")}>atHome</span>
-            <span className={`chip ${sources.includes("immotop") ? "on" : ""}`} onClick={() => toggleSource("immotop")}>immotop</span>
+            <span className={`chip ${hasAthome ? "on" : ""}`} onClick={() => toggleSource("athome")}>atHome</span>
+            <span className={`chip ${hasImmotop ? "on" : ""}`} onClick={() => toggleSource("immotop")}>Immotop</span>
           </div>
           <p className="zone-picker__hint" style={{ marginTop: 6 }}>
-            Les biens présents sur les deux portails sont dédupliqués automatiquement (signalés « atHome + immotop » dans les résultats).
+            {hasAthome && hasImmotop
+              ? "Les biens présents sur les deux portails sont dédupliqués automatiquement (signalés « atHome + Immotop » dans les résultats)."
+              : "Choisis atHome, Immotop, ou les deux. Chaque portail a ses propres filtres ci-dessous."}
           </p>
-        </div>
-
-        <div style={{ marginTop: 16 }}>
-          <label>État du bien</label>
-          <div className="chips">
-            {([["a_renover", "À rénover"], ["habitable", "Habitable"], ["renove", "Rénové"]] as const).map(([k, lbl]) => (
-              <span key={k} className={`chip ${conditions.includes(k) ? "on" : ""}`} onClick={() => toggleCondition(k)}>{lbl}</span>
-            ))}
-          </div>
-          <p className="zone-picker__hint" style={{ marginTop: 6 }}>
-            Filtre l'état de rénovation — <strong>appliqué à immotop uniquement</strong> (atHome ne fournit pas cette donnée). Vide = tous les états. Idéal pour cibler les biens « à rénover ».
-          </p>
-        </div>
-
-        <div style={{ marginTop: 18 }}>
-          <label>Localisation</label>
-          <ZonePicker value={locCodes} onChange={setLocCodes} />
-        </div>
-
-        <div className="row" style={{ marginTop: 16 }}>
-          <div><label>Surface min (m²)</label><input type="number" value={surfaceMin} onChange={(e) => setSurfaceMin(e.target.value)} /></div>
-          <div><label>Surface max (m²)</label><input type="number" value={surfaceMax} onChange={(e) => setSurfaceMax(e.target.value)} /></div>
-          <div><label>Prix min (€)</label><input type="number" value={priceMin} onChange={(e) => setPriceMin(e.target.value)} /></div>
-          <div><label>Prix max (€)</label><input type="number" value={priceMax} onChange={(e) => setPriceMax(e.target.value)} /></div>
-        </div>
-
-        <div style={{ marginTop: 16 }}>
-          <label>Classes énergétiques</label>
-          <div className="zone-picker__toggle-row" style={{ borderBottom: "none", paddingBottom: 0, marginBottom: 0 }}>
-            <Toggle checked={allCpe} onChange={setAllCpe} />
-            <span className="zone-picker__toggle-label">Toutes les notes CPE</span>
-          </div>
-          {!allCpe && (
-            <>
-              <div className="chips" style={{ marginTop: 12 }}>
-                {CPE.map((c) => (
-                  <span key={c} className={`chip ${cpe.includes(c) ? "on" : ""}`} onClick={() => toggleCpe(c)}>{c}</span>
-                ))}
-              </div>
-              <div className="zone-picker__toggle-row" style={{ marginTop: 14, borderBottom: "none", paddingBottom: 0, marginBottom: 0 }}>
-                <Toggle checked={includeNoCpe} onChange={setIncludeNoCpe} />
-                <span className="zone-picker__toggle-label">Inclure les biens sans note de CPE</span>
-              </div>
-              <p className="zone-picker__hint" style={{ marginTop: 6 }}>
-                Garde aussi les annonces dont le CPE est « en cours d'élaboration » (pour ne pas rater une pépite).
-                Scrape alors toutes les notes puis filtre après coup : recherche un peu plus lente.
-              </p>
-            </>
-          )}
         </div>
       </div>
+
+      {sources.length === 0 && (
+        <p className="empty">Choisis au moins une source pour configurer la recherche.</p>
+      )}
+
+      {sources.length > 0 && (
+        <>
+          {/* --- Filtres communs aux deux sources --- */}
+          <div className="card">
+            <div className="zone-picker__toggle-row" style={{ borderBottom: "none", paddingBottom: 0, marginBottom: 0 }}>
+              <Toggle checked={!includeNew} onChange={(v) => setIncludeNew(!v)} />
+              <span className="zone-picker__toggle-label">Bien existant uniquement</span>
+            </div>
+            {includeNew && (
+              <p className="zone-picker__hint" style={{ marginTop: 6 }}>
+                Désactivé : les programmes neufs en construction sont aussi inclus.
+              </p>
+            )}
+
+            <div className="row" style={{ marginTop: 16 }}>
+              <div>
+                <label>Type de bien</label>
+                <select value={propertyType} onChange={(e) => setPropertyType(e.target.value)}>
+                  <option value="apartment">Appartement</option>
+                  <option value="house">Maison</option>
+                  <option value="both">Les deux</option>
+                </select>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 18 }}>
+              <label>Localisation</label>
+              <ZonePicker value={locCodes} onChange={setLocCodes} />
+            </div>
+
+            <div className="row" style={{ marginTop: 16 }}>
+              <div><label>Surface min (m²)</label><input type="number" value={surfaceMin} onChange={(e) => setSurfaceMin(e.target.value)} /></div>
+              <div><label>Surface max (m²)</label><input type="number" value={surfaceMax} onChange={(e) => setSurfaceMax(e.target.value)} /></div>
+              <div><label>Prix min (€)</label><input type="number" value={priceMin} onChange={(e) => setPriceMin(e.target.value)} /></div>
+              <div><label>Prix max (€)</label><input type="number" value={priceMax} onChange={(e) => setPriceMax(e.target.value)} /></div>
+            </div>
+          </div>
+
+          {/* --- Filtres spécifiques par source : CPE atHome / énergie + état Immotop --- */}
+          {(hasAthome || hasImmotop) && (
+            <>
+              <div className="section-title">
+                <h2>Énergie & état</h2>
+                <span className="rule" />
+              </div>
+              <div className="card">
+                {hasAthome && (
+                  <div>
+                    <label>Classes énergétiques · atHome</label>
+                    <div className="zone-picker__toggle-row" style={{ borderBottom: "none", paddingBottom: 0, marginBottom: 0 }}>
+                      <Toggle checked={allCpe} onChange={setAllCpe} />
+                      <span className="zone-picker__toggle-label">Toutes les notes CPE</span>
+                    </div>
+                    {!allCpe && (
+                      <>
+                        <div className="chips" style={{ marginTop: 12 }}>
+                          {CPE.map((c) => (
+                            <span key={c} className={`chip ${cpe.includes(c) ? "on" : ""}`} onClick={() => toggleCpe(c)}>{c}</span>
+                          ))}
+                        </div>
+                        <div className="zone-picker__toggle-row" style={{ marginTop: 14, borderBottom: "none", paddingBottom: 0, marginBottom: 0 }}>
+                          <Toggle checked={includeNoCpe} onChange={setIncludeNoCpe} />
+                          <span className="zone-picker__toggle-label">Inclure les biens sans note de CPE</span>
+                        </div>
+                        <p className="zone-picker__hint" style={{ marginTop: 6 }}>
+                          Garde aussi les annonces dont le CPE est « en cours d'élaboration » (pour ne pas rater une pépite).
+                        </p>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {hasImmotop && (
+                  <div style={{ marginTop: hasAthome ? 22 : 0, paddingTop: hasAthome ? 18 : 0, borderTop: hasAthome ? "1px solid var(--line)" : "none" }}>
+                    <label>Énergie · Immotop</label>
+                    <select value={immotopEnergy} onChange={(e) => setImmotopEnergy(e.target.value as any)}>
+                      <option value="">Toutes</option>
+                      <option value="excellente">Excellente</option>
+                      <option value="moyenne">Moyenne</option>
+                      <option value="basse">Basse</option>
+                    </select>
+                    <p className="zone-picker__hint" style={{ marginTop: 6 }}>
+                      Immotop ne donne pas la classe CPE exacte : seulement 3 bandes <strong>cumulatives</strong>
+                      (« cette qualité et mieux »). Indicatif, moins précis que le CPE d'atHome.
+                    </p>
+
+                    <label style={{ marginTop: 16 }}>État du bien · Immotop</label>
+                    <div className="chips">
+                      {([["a_renover", "À rénover"], ["habitable", "Habitable"], ["renove", "Rénové"]] as const).map(([k, lbl]) => (
+                        <span key={k} className={`chip ${conditions.includes(k) ? "on" : ""}`} onClick={() => toggleCondition(k)}>{lbl}</span>
+                      ))}
+                    </div>
+                    <p className="zone-picker__hint" style={{ marginTop: 6 }}>
+                      État de rénovation, propre à Immotop (atHome ne le fournit pas). Vide = tous les états.
+                      Idéal pour cibler les biens « à rénover ».
+                    </p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </>
+      )}
 
       <div className="section-title">
         <h2>Paramètres de scoring</h2>
