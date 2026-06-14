@@ -124,8 +124,8 @@ export async function POST(req: NextRequest) {
         ? l.photos.filter((p) => typeof p === "string" && p.startsWith("http")).slice(0, 6)
         : [];
       return pool.query(
-        `INSERT INTO listings (id, source, price, surface, commune, rooms, title, url, cpe, photos, lat, lng, address)
-         VALUES ($1, $13, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12)
+        `INSERT INTO listings (id, source, price, surface, commune, rooms, title, url, cpe, photos, lat, lng, address, etat)
+         VALUES ($1, $13, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $14)
          ON CONFLICT (id) DO UPDATE SET
            last_seen  = now(),
            prev_price = CASE
@@ -146,12 +146,13 @@ export async function POST(req: NextRequest) {
            -- S10 — ne jamais écraser des coordonnées connues par un null.
            lat     = COALESCE(EXCLUDED.lat, listings.lat),
            lng     = COALESCE(EXCLUDED.lng, listings.lng),
+           etat    = COALESCE(EXCLUDED.etat, listings.etat),
            address = CASE
              WHEN EXCLUDED.address IS NOT NULL AND EXCLUDED.address <> '' THEN EXCLUDED.address
              ELSE listings.address
            END`,
         [l.id, l.price, l.surface ?? null, l.commune ?? null, l.rooms ?? null, l.title ?? null, l.url, l.cpe ?? null, JSON.stringify(photos),
-         typeof l.lat === "number" ? l.lat : null, typeof l.lng === "number" ? l.lng : null, l.address ?? null, sourceTag]
+         typeof l.lat === "number" ? l.lat : null, typeof l.lng === "number" ? l.lng : null, l.address ?? null, sourceTag, (l as any).etat ?? null]
       );
     })
   );

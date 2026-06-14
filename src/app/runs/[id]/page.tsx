@@ -17,7 +17,15 @@ type Scored = {
   photos?: string[]; // S8
   lat?: number | null; lng?: number | null; address?: string | null; // S10
   source?: "athome" | "immotop" | "both"; altUrl?: string; // S14
+  etat?: "a_renover" | "habitable" | "renove" | null; // S14
 };
+
+// S14 — état de rénovation (immotop). Affiché OK/Négocier-style en petit badge.
+const ETAT_LABEL: Record<string, string> = { a_renover: "À rénover", habitable: "Habitable", renove: "Rénové" };
+function EtatBadge({ etat }: { etat?: string | null }) {
+  if (!etat || !ETAT_LABEL[etat]) return null;
+  return <span className={`etat-badge ${etat}`}>{ETAT_LABEL[etat]}</span>;
+}
 type RunStats = {
   totalAtHome: number; pagesFetched: number; pagesPlanned: number;
   countSold: number; countNew: number; capped: boolean;
@@ -223,6 +231,7 @@ export default function RunPage({ params }: { params: { id: string } }) {
                             ) : r.source === "immotop" ? (
                               <span className="src-badge" title="Source : immotop.lu">immotop</span>
                             ) : null}
+                            <EtatBadge etat={r.etat} />
                             {r.commune && <div className="muted" style={{ fontSize: "0.78rem" }}>{r.commune}</div>}
                           </td>
                           <td className="num" data-label="Prix">

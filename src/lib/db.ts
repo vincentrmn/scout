@@ -344,6 +344,9 @@ export function ensureSchema(): Promise<void> {
       );
       // market_samples : provenance du comp (évite le double-comptage cross-source).
       await pool.query(`ALTER TABLE market_samples ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'athome';`);
+      // S14 — état de rénovation lu directement chez immotop (ga4Condition) :
+      // 'a_renover' | 'habitable' | 'renove'. NULL pour atHome (pas de donnée).
+      await pool.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS etat TEXT;`);
       // Run du scraper immotop (parallèle au survey ; n'alimente pas les runs atHome).
       await pool.query(`ALTER TABLE runs ADD COLUMN IF NOT EXISTS is_immotop BOOLEAN NOT NULL DEFAULT false;`);
       // S14 — recherche multi-sources : nb de sources dont on attend encore le POST.

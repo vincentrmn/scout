@@ -152,6 +152,11 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 /* S14 — provenance immotop (2e source). */
 .src-badge { display: inline-block; margin-left: 8px; font-size: 0.66rem; font-weight: 600; padding: 1px 6px; border-radius: 5px; background: var(--green-soft); color: var(--green-ink); vertical-align: middle; }
 .src-badge:hover { text-decoration: none; }
+/* S14 — état de rénovation immotop. */
+.etat-badge { display: inline-block; margin-left: 8px; font-size: 0.66rem; font-weight: 600; padding: 1px 6px; border-radius: 5px; vertical-align: middle; }
+.etat-badge.a_renover { background: #fdeccf; color: #9a5b00; }
+.etat-badge.habitable { background: var(--paper-2); color: var(--ink-soft); }
+.etat-badge.renove { background: var(--green-soft); color: var(--green-ink); }
 
 .center-screen { min-height: 100vh; display: grid; place-items: center; padding: 22px; }
 .login-card { width: 100%; max-width: 360px; }

@@ -56,7 +56,10 @@ type TrackedListing = {
   source?: string;          // S14 — 'athome' | 'immotop'
   alt_source?: string | null; // S14 — 2e annonce du même bien (dédup cross-source)
   alt_url?: string | null;
+  etat?: "a_renover" | "habitable" | "renove" | null; // S14 — état immotop
 };
+
+const ETAT_LABEL: Record<string, string> = { a_renover: "À rénover", habitable: "Habitable", renove: "Rénové" };
 
 const eur = (n: number) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " €";
 
@@ -466,6 +469,9 @@ export default function TrackedPage() {
                           )}
                           {l.alt_source === "immotop" && l.alt_url && (
                             <a className="src-badge" href={l.alt_url} target="_blank" rel="noreferrer" title="Aussi listé sur immotop.lu">aussi immotop ↗</a>
+                          )}
+                          {l.etat && ETAT_LABEL[l.etat] && (
+                            <span className={`etat-badge ${l.etat}`}>{ETAT_LABEL[l.etat]}</span>
                           )}
                           {l.commune && (
                             <div className="muted" style={{ fontSize: "0.78rem" }}>{l.commune}</div>

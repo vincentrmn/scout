@@ -29,6 +29,9 @@ export type Criteria = {
    *  Absent / vide => ['athome'] (rétro-compat). 'immotop' n'est tenté que si
    *  N8N_IMMOTOP_WEBHOOK_URL est configuré (sinon ignoré silencieusement). */
   sources?: ("athome" | "immotop")[];
+  /** S14 — filtre d'état de rénovation (immotop uniquement : atHome n'a pas la
+   *  donnée). Vide/absent => pas de filtre. Mappé sur le param `stato` immotop. */
+  conditions?: ("a_renover" | "habitable" | "renove")[];
 };
 
 export type ConfigRow = {
