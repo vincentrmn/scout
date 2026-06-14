@@ -40,6 +40,8 @@ export default function NewSearch() {
   const [includeNoCpe, setIncludeNoCpe] = useState(false);
   // S14 — sources de scraping (atHome / immotop). Les deux par défaut.
   const [sources, setSources] = useState<("athome" | "immotop")[]>(["athome", "immotop"]);
+  // S14 — filtre d'état (immotop only). Vide = tous les états.
+  const [conditions, setConditions] = useState<("a_renover" | "habitable" | "renove")[]>([]);
 
   // scoring — S4 : le prix de revente n'est plus ici (calibre par zone dans Reglages).
   const [worksEurPerM2, setWorks] = useState("1500");
@@ -59,6 +61,10 @@ export default function NewSearch() {
     setSources((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
   }
 
+  function toggleCondition(c: "a_renover" | "habitable" | "renove") {
+    setConditions((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
+  }
+
   function buildPayload() {
     const num = (v: string) => (v.trim() === "" ? undefined : Number(v));
     return {
@@ -75,6 +81,7 @@ export default function NewSearch() {
         // Sans objet si « Toutes les notes CPE » est actif (déjà tout inclus).
         includeNoCpe: allCpe ? false : includeNoCpe,
         sources,
+        conditions,
       },
       scoring: {
         worksEurPerM2: Number(worksEurPerM2),
@@ -170,6 +177,18 @@ export default function NewSearch() {
           </div>
           <p className="zone-picker__hint" style={{ marginTop: 6 }}>
             Les biens présents sur les deux portails sont dédupliqués automatiquement (signalés « atHome + immotop » dans les résultats).
+          </p>
+        </div>
+
+        <div style={{ marginTop: 16 }}>
+          <label>État du bien</label>
+          <div className="chips">
+            {([["a_renover", "À rénover"], ["habitable", "Habitable"], ["renove", "Rénové"]] as const).map(([k, lbl]) => (
+              <span key={k} className={`chip ${conditions.includes(k) ? "on" : ""}`} onClick={() => toggleCondition(k)}>{lbl}</span>
+            ))}
+          </div>
+          <p className="zone-picker__hint" style={{ marginTop: 6 }}>
+            Filtre l'état de rénovation — <strong>appliqué à immotop uniquement</strong> (atHome ne fournit pas cette donnée). Vide = tous les états. Idéal pour cibler les biens « à rénover ».
           </p>
         </div>
 

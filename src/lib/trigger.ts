@@ -86,6 +86,11 @@ export async function triggerRun(
   // immotop : best-effort. Un échec d'envoi décrémente le compteur (le run se
   // termine alors avec les seuls résultats atHome) — il ne casse jamais le run.
   if (fire.includes("immotop")) {
+    // S14 — filtre d'état BBI -> ids `stato` immotop (à rénover=5, habitable=2, rénové=6).
+    const STATO_BY_ETAT: Record<string, number> = { a_renover: 5, habitable: 2, renove: 6 };
+    const statoIds = (Array.isArray(criteria.conditions) ? criteria.conditions : [])
+      .map((c: string) => STATO_BY_ETAT[c])
+      .filter((v: number | undefined): v is number => typeof v === "number");
     const imCriteria = {
       propertyType: criteria.propertyType,
       includeNew: criteria.includeNew,
@@ -94,6 +99,7 @@ export async function triggerRun(
       priceMin: criteria.priceMin,
       priceMax: criteria.priceMax,
       quartierSlugs,
+      statoIds,
       maxPages: 50,
     };
     fetch(immotopWebhook!, {

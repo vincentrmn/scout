@@ -33,6 +33,8 @@ export type Listing = {
   address?: string | null;
   /** S12 — description de l'annonce (relevé de marché, runs is_survey). */
   description?: string | null;
+  /** S14 — état de rénovation (immotop : lu sur ga4Condition ; atHome : absent). */
+  etat?: "a_renover" | "habitable" | "renove" | null;
 };
 
 export type Scored = Listing & {

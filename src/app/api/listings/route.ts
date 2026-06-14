@@ -51,7 +51,7 @@ export async function GET() {
         first_seen, last_seen, tracked, tracked_at,
         follow_status, photos, search_scoring, analysis_scoring,
         lat, lng, address,
-        source, alt_source, alt_url,
+        source, alt_source, alt_url, etat,
         CASE
           WHEN prev_price IS NOT NULL AND prev_price <> price
           THEN price - prev_price

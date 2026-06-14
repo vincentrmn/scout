@@ -108,6 +108,7 @@ export async function POST(req: NextRequest) {
              address    = CASE WHEN (address IS NULL OR address = '') AND $4 <> '' THEN $4 ELSE address END,
              lat        = COALESCE(lat, $5),
              lng        = COALESCE(lng, $6),
+             etat       = COALESCE(listings.etat, $8),
              photos     = CASE WHEN jsonb_array_length(photos) = 0 THEN $7::jsonb ELSE photos END
            WHERE id = $1`,
           [
@@ -118,6 +119,7 @@ export async function POST(req: NextRequest) {
             typeof m.bien.lat === "number" ? m.bien.lat : null,
             typeof m.bien.lng === "number" ? m.bien.lng : null,
             JSON.stringify(photos),
+            (m.bien as any).etat ?? null,
           ]
         );
         merged++;
@@ -145,8 +147,8 @@ export async function POST(req: NextRequest) {
       withId.map(({ l, lid }) => {
         const photos = sanitizePhotos(l.photos);
         return pool.query(
-          `INSERT INTO listings (id, source, price, surface, commune, rooms, title, url, cpe, photos, lat, lng, address)
-           VALUES ($1, 'immotop', $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12)
+          `INSERT INTO listings (id, source, price, surface, commune, rooms, title, url, cpe, photos, lat, lng, address, etat)
+           VALUES ($1, 'immotop', $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $13)
            ON CONFLICT (id) DO UPDATE SET
              last_seen  = now(),
              prev_price = CASE WHEN listings.price <> EXCLUDED.price THEN listings.price ELSE listings.prev_price END,
@@ -159,6 +161,7 @@ export async function POST(req: NextRequest) {
              photos  = CASE WHEN jsonb_array_length(EXCLUDED.photos) > 0 THEN EXCLUDED.photos ELSE listings.photos END,
              lat     = COALESCE(EXCLUDED.lat, listings.lat),
              lng     = COALESCE(EXCLUDED.lng, listings.lng),
+             etat    = COALESCE(EXCLUDED.etat, listings.etat),
              address = CASE WHEN EXCLUDED.address IS NOT NULL AND EXCLUDED.address <> '' THEN EXCLUDED.address ELSE listings.address END`,
           [
             lid,
@@ -173,6 +176,7 @@ export async function POST(req: NextRequest) {
             typeof l.lat === "number" ? l.lat : null,
             typeof l.lng === "number" ? l.lng : null,
             l.address ?? null,
+            (l as any).etat ?? null,
           ]
         );
       })
@@ -221,12 +225,14 @@ export async function POST(req: NextRequest) {
             ? Math.round((l.price / l.surface) * 100) / 100
             : null;
         const description = typeof l.description === "string" ? l.description.slice(0, 2000) : null;
+        // S14 — état lu directement chez immotop (ga4Condition) ; confiance 1.
+        const etat = (l as any).etat ?? null;
         const r = await pool.query(
-          `INSERT INTO market_samples (listing_id, quartier_slug, price, surface, price_m2, cpe, description, url, source)
-           VALUES ($1, $2, $3, $4, $5, NULL, $6, $7, 'immotop') RETURNING id`,
-          [lid, slug, l.price, l.surface ?? null, priceM2, description, l.url ?? null]
+          `INSERT INTO market_samples (listing_id, quartier_slug, price, surface, price_m2, cpe, description, url, source, etat, etat_confidence)
+           VALUES ($1, $2, $3, $4, $5, NULL, $6, $7, 'immotop', $8, $9) RETURNING id`,
+          [lid, slug, l.price, l.surface ?? null, priceM2, description, l.url ?? null, etat, etat ? 1 : null]
         );
-        return { id: r.rows[0].id as number, description };
+        return { id: r.rows[0].id as number, description, etat };
       })
     );
 
@@ -238,11 +244,12 @@ export async function POST(req: NextRequest) {
       [runId, withId.length, mergedStats ? JSON.stringify(mergedStats) : statsJson]
     );
 
-    // Classification LLM de l'état (best-effort, comme le survey).
+    // Classification LLM de l'état : seulement pour les comps SANS état immotop
+    // (ga4Condition absent ~56 % du temps). Best-effort, comme le survey.
     if (hasAnthropicKey()) {
       const nap = (ms: number) => new Promise((r) => setTimeout(r, ms));
       for (const s of samples) {
-        if (!s.description) continue;
+        if (s.etat || !s.description) continue;
         try {
           const c = await classifyEtat(s.description);
           if (c) await pool.query(`UPDATE market_samples SET etat=$2, etat_confidence=$3 WHERE id=$1`, [s.id, c.etat, c.confidence]);

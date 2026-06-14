@@ -198,3 +198,20 @@ Le formulaire de recherche permet désormais de choisir les **sources** (atHome 
 - Badge source : page de résultats + Suivis.
 
 **Limite connue v1** : la dédup *référentielle* (table `listings`) reste portée par `/api/ingest-immotop` (veille). Dans un run de recherche manuel, un bien présent sur les deux portails est fusionné **dans les résultats** (1 ligne, source `both`), mais peut exister en double dans `listings` (1 ligne atHome + 1 ligne `immotop-…`). Invisible à l'usage (le suivi épingle le primaire atHome). À unifier si besoin.
+
+## 10. CPE & état de rénovation immotop (S14, complément)
+
+**CPE exact : indisponible.** immotop n'expose pas la classe énergétique par bien, et son filtre énergie (`classeEnergetica=<id>`, scalaire) est une **bande cumulative** (High/Medium/Low « et mieux »), pas un C-F précis. On ne reproduit donc pas le filtre CPE fin d'atHome. *(Couverture du CPE dans la description : ~8 % seulement → piste écartée. Fiche détail JSON : 500, indisponible.)*
+
+**État de rénovation : disponible nativement** — c'est le levier immotop pour BBI.
+- **Filtre** : param **`stato=<id>`** (scalaire ; champ `conditionsId`). Mapping (confirmé via `ga4Condition` des résultats) :
+  `1` = Neuf · `2` = Habitable (Buono/Abitabile) · `5` = **À rénover** (Da ristrutturare) · `6` = Rénové (Ottimo/Ristrutturato).
+- **Par bien** : **`properties[0].ga4Condition`** donne l'état (présent ~44 % du temps) → renseigne `etat` (`a_renover|habitable|renove`) **sans LLM**.
+
+**Implémenté (S14)** :
+- `Listing.etat`, `listings.etat`, `Criteria.conditions`.
+- Scraper immotop : lit `ga4Condition→etat` ; filtre condition = scrape par `stato` (par état sélectionné) + dédup id ; param scalaire donc un scrape par condition.
+- `triggerRun` mappe `conditions` → `statoIds` (5/2/6).
+- Formulaire : sélecteur « État du bien » (À rénover / Habitable / Rénové) — **appliqué à immotop uniquement** (atHome n'a pas la donnée).
+- Badge état (résultats + Suivis) ; `market_samples.etat` immotop depuis `ga4Condition` (LLM en fallback si absent).
+- Note : `classeEnergetica` (bandes) non exploité pour l'instant — non aligné sur le C-F BBI.
