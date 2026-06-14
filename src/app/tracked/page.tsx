@@ -53,6 +53,7 @@ type TrackedListing = {
   lng?: number | null;
   address?: string | null;
   loc?: "exact" | "athome" | "quartier";
+  quartierSlug?: string | null; // S15 — pour le rapprochement vélocité
   source?: string;          // S14 — 'athome' | 'immotop'
   alt_source?: string | null; // S14 — 2e annonce du même bien (dédup cross-source)
   alt_url?: string | null;
@@ -86,6 +87,8 @@ const fmtDateTime = (iso: string) =>
 export default function TrackedPage() {
   const [listings, setListings] = useState<TrackedListing[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // S15 — vélocité de marché par quartier (slug -> délai médian de vente, jours).
+  const [vel, setVel] = useState<Record<string, number>>({});
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [me, setMe] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -179,6 +182,20 @@ export default function TrackedPage() {
   };
 
   useEffect(() => { load(); }, []);
+
+  // S15 — délai de vente médian par quartier (pour situer chaque bien suivi).
+  useEffect(() => {
+    fetch("/api/market")
+      .then((r) => r.json())
+      .then((j) => {
+        if (Array.isArray(j?.velocity)) {
+          const m: Record<string, number> = {};
+          for (const v of j.velocity) if (v.medianDays != null) m[v.slug] = v.medianDays;
+          setVel(m);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const toggle = (id: string) => setOpen((p) => ({ ...p, [id]: !p[id] }));
 
@@ -476,6 +493,19 @@ export default function TrackedPage() {
                           {l.commune && (
                             <div className="muted" style={{ fontSize: "0.78rem" }}>{l.commune}</div>
                           )}
+                          {(() => {
+                            // S15 — situe le bien vs la vélocité de son quartier.
+                            const onMarket = daysSince(l.first_seen);
+                            const med = l.quartierSlug ? vel[l.quartierSlug] : undefined;
+                            if (onMarket < 1) return null;
+                            const slow = med != null && onMarket >= med * 1.5;
+                            return (
+                              <div className="muted" style={{ fontSize: "0.74rem", marginTop: 2, color: slow ? "#9a5b00" : undefined }}>
+                                ⏱️ vu il y a {onMarket} j
+                                {med != null ? ` · quartier ~${med} j${slow ? " — long, à négocier" : ""}` : ""}
+                              </div>
+                            );
+                          })()}
                         </td>
                         <td className="num" data-label="Prix">
                           {eur(l.price)}

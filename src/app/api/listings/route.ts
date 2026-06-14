@@ -156,7 +156,7 @@ export async function GET() {
       const eff = analysis ?? baseline;
 
       if (!row.surface || row.surface <= 0) {
-        return { ...row, ...geo, matchedConfigIds, marginPct: null, baselineScoring: baseline, analysisScoring: analysis, history, notes };
+        return { ...row, ...geo, quartierSlug: slug, matchedConfigIds, marginPct: null, baselineScoring: baseline, analysisScoring: analysis, history, notes };
       }
 
       const s = scoreListing(
@@ -183,6 +183,7 @@ export async function GET() {
       return {
         ...row,
         ...geo,
+        quartierSlug: slug,
         matchedConfigIds,
         resalePerM2: s.resalePerM2,
         priceIsDefault: zone.priceIsDefault,

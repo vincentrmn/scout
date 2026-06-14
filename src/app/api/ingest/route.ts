@@ -80,6 +80,24 @@ export async function POST(req: NextRequest) {
   if (!runRow.rows.length) return NextResponse.json({ error: "run introuvable" }, { status: 404 });
   const { config_id, config_name, is_survey } = runRow.rows[0];
 
+  // S15 — Capture des biens passés « vendus » (atHome `isSoldProperty`, émis par
+  // le scraper dans stats.sold). Idempotent : sold_at figé à la 1re détection.
+  // Best-effort, n'impacte jamais le reste de l'ingest.
+  const soldList: Array<{ id: any; price?: any }> = Array.isArray((stats as any)?.sold) ? (stats as any).sold : [];
+  if (soldList.length) {
+    await Promise.all(
+      soldList.map((s) =>
+        pool
+          .query(
+            `UPDATE listings SET market_status='sold', sold_at=COALESCE(sold_at, now()), sold_price=COALESCE($2, sold_price, price)
+             WHERE id=$1 AND market_status <> 'sold'`,
+            [String(s.id), typeof s.price === "number" ? s.price : null]
+          )
+          .catch((e) => console.error("[ingest sold]", s.id, e))
+      )
+    );
+  }
+
   const safe = Array.isArray(listings) ? listings : [];
   const filtered = safe.filter(
     (l) => l && typeof l.price === "number" && typeof l.surface === "number" && l.surface > 0
@@ -147,6 +165,10 @@ export async function POST(req: NextRequest) {
            lat     = COALESCE(EXCLUDED.lat, listings.lat),
            lng     = COALESCE(EXCLUDED.lng, listings.lng),
            etat    = COALESCE(EXCLUDED.etat, listings.etat),
+           -- S15 — un bien revu actif (re-listé) repasse 'active'.
+           market_status = 'active',
+           sold_at = NULL,
+           sold_price = NULL,
            address = CASE
              WHEN EXCLUDED.address IS NOT NULL AND EXCLUDED.address <> '' THEN EXCLUDED.address
              ELSE listings.address
