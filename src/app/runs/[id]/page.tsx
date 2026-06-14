@@ -16,6 +16,7 @@ type Scored = {
   priceDelta?: number | null; // S5
   photos?: string[]; // S8
   lat?: number | null; lng?: number | null; address?: string | null; // S10
+  source?: "athome" | "immotop" | "both"; altUrl?: string; // S14
 };
 type RunStats = {
   totalAtHome: number; pagesFetched: number; pagesPlanned: number;
@@ -217,6 +218,11 @@ export default function RunPage({ params }: { params: { id: string } }) {
                           </td>
                           <td className="cell-main">
                             <a href={r.url} target="_blank" rel="noreferrer">{r.title || r.id}</a>
+                            {r.source === "both" && r.altUrl ? (
+                              <a className="src-badge" href={r.altUrl} target="_blank" rel="noreferrer" title="Présent sur les deux portails">atHome + immotop ↗</a>
+                            ) : r.source === "immotop" ? (
+                              <span className="src-badge" title="Source : immotop.lu">immotop</span>
+                            ) : null}
                             {r.commune && <div className="muted" style={{ fontSize: "0.78rem" }}>{r.commune}</div>}
                           </td>
                           <td className="num" data-label="Prix">

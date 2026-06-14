@@ -4,7 +4,43 @@ import { scoreListing, type Listing } from "@/lib/scoring";
 import { getZonePriceMap, resolveResalePerM2, quartierSlug } from "@/lib/zones";
 import { classifyEtat, hasAnthropicKey } from "@/lib/classify";
 import { generateProposals } from "@/lib/proposals";
+import { isSameProperty } from "@/lib/dedup";
 import type { RunStats } from "@/lib/types";
+
+// S14 — fusion des résultats d'un run multi-sources. `existing` (déjà présents,
+// taggés) + `incoming` (une seule source). Dédup cross-source (géo+surface+prix) :
+// un bien retrouvé sur les 2 portails devient source='both' (atHome primaire),
+// avec altUrl vers l'autre annonce. Ambigu (immeuble multi-lots) => gardé séparé.
+function mergeRunResults(existing: any[], incoming: any[]): any[] {
+  const out = existing.slice();
+  for (const inc of incoming) {
+    const incSrc = inc.source === "both" ? "athome" : inc.source ?? "athome";
+    const hits: number[] = [];
+    for (let i = 0; i < out.length; i++) {
+      const e = out[i];
+      const eSrc = e.source === "both" ? "athome" : e.source ?? "athome";
+      if (eSrc === incSrc) continue; // même source : pas de fusion (PK gère les re-scrapes)
+      if (
+        isSameProperty(
+          { price: e.price, surface: e.surface, lat: e.lat ?? null, lng: e.lng ?? null },
+          { price: inc.price, surface: inc.surface, lat: inc.lat ?? null, lng: inc.lng ?? null }
+        )
+      )
+        hits.push(i);
+    }
+    if (hits.length === 1) {
+      const i = hits[0];
+      const other = out[i];
+      out[i] =
+        incSrc === "athome"
+          ? { ...inc, source: "both", altUrl: other.url }
+          : { ...other, source: "both", altUrl: inc.url };
+    } else {
+      out.push(inc); // 0 match ou ambigu => bien séparé
+    }
+  }
+  return out;
+}
 
 export const runtime = "nodejs";
 
@@ -49,6 +85,15 @@ export async function POST(req: NextRequest) {
     (l) => l && typeof l.price === "number" && typeof l.surface === "number" && l.surface > 0
   );
 
+  // S14 — source du POST ('athome' par défaut). Les biens immotop reçoivent un id
+  // préfixé pour ne pas entrer en collision avec les ids atHome. Tout le reste du
+  // pipeline (upsert, snapshots, scoring) travaille ensuite sur `items`.
+  const sourceTag: "athome" | "immotop" = (body as any).source === "immotop" ? "immotop" : "athome";
+  const items = filtered.map((l) => ({
+    ...l,
+    id: sourceTag === "immotop" ? `immotop-${l.id}` : String(l.id),
+  }));
+
   // S13 — réconciliation des exclusions : on enregistre combien de biens n8n a
   // transmis (countReceived) et combien l'app a rejetés faute de prix/surface
   // exploitable (countIncomplete). Permet d'expliquer chaque bien manquant.
@@ -58,7 +103,7 @@ export async function POST(req: NextRequest) {
   const mergedStatsJson = mergedStats ? JSON.stringify(mergedStats) : statsJson;
 
   // S5 — prix actuellement stockes (detection baisse/hausse + nouveaute). 1 SELECT batch.
-  const ids = filtered.map((l) => l.id);
+  const ids = items.map((l) => l.id);
   const prevRows =
     ids.length > 0
       ? (
@@ -74,13 +119,13 @@ export async function POST(req: NextRequest) {
   // S8 — photos : on n'ecrase jamais des photos existantes par un tableau vide
   //      (un scrape qui rate les photos ne doit pas faire regresser la fiche).
   await Promise.all(
-    filtered.map((l) => {
+    items.map((l) => {
       const photos = Array.isArray(l.photos)
         ? l.photos.filter((p) => typeof p === "string" && p.startsWith("http")).slice(0, 6)
         : [];
       return pool.query(
-        `INSERT INTO listings (id, price, surface, commune, rooms, title, url, cpe, photos, lat, lng, address)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12)
+        `INSERT INTO listings (id, source, price, surface, commune, rooms, title, url, cpe, photos, lat, lng, address)
+         VALUES ($1, $13, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12)
          ON CONFLICT (id) DO UPDATE SET
            last_seen  = now(),
            prev_price = CASE
@@ -106,14 +151,14 @@ export async function POST(req: NextRequest) {
              ELSE listings.address
            END`,
         [l.id, l.price, l.surface ?? null, l.commune ?? null, l.rooms ?? null, l.title ?? null, l.url, l.cpe ?? null, JSON.stringify(photos),
-         typeof l.lat === "number" ? l.lat : null, typeof l.lng === "number" ? l.lng : null, l.address ?? null]
+         typeof l.lat === "number" ? l.lat : null, typeof l.lng === "number" ? l.lng : null, l.address ?? null, sourceTag]
       );
     })
   );
 
   // S6 Phase 1 — Snapshot de prix : si bien nouveau OU prix change.
   await Promise.all(
-    filtered
+    items
       .filter((l) => {
         const prev = prevPriceMap.get(l.id);
         return prev === undefined || prev !== l.price;
@@ -127,7 +172,7 @@ export async function POST(req: NextRequest) {
   // Nouveautés. (Upsert listings + snapshots déjà faits ci-dessus.)
   if (is_survey) {
     const samples = await Promise.all(
-      filtered.map(async (l) => {
+      items.map(async (l) => {
         const slug = quartierSlug(l.commune);
         const priceM2 =
           typeof l.surface === "number" && l.surface > 0
@@ -183,21 +228,52 @@ export async function POST(req: NextRequest) {
   if (!scoring) return NextResponse.json({ error: "scoring introuvable" }, { status: 404 });
   const priceMap = await getZonePriceMap();
 
-  // Score + delta
-  const scored = filtered
+  // Score + delta (taggé source pour la fusion multi-sources).
+  const scored = items
     .map((l) => {
       const { resalePerM2, priceIsDefault } = resolveResalePerM2(l.commune, priceMap);
       const base = scoreListing(l, scoring, resalePerM2, priceIsDefault);
       const prev = prevPriceMap.get(l.id);
       const priceDelta = prev !== undefined && prev !== l.price ? l.price - prev : null;
-      return { ...base, priceDelta };
+      return { ...base, priceDelta, source: sourceTag };
     })
     .sort((a, b) => b.marginPct - a.marginPct);
 
-  await pool.query(
-    `UPDATE runs SET status='done', count=$2, results=$3, stats=$4, finished_at=now() WHERE id=$1`,
-    [runId, scored.length, JSON.stringify(scored), mergedStatsJson]
-  );
+  // S14 — finalisation multi-sources : fusion + dédup dans une transaction (verrou
+  // de ligne) pour sérialiser les POST atHome/immotop concurrents sur le même run.
+  //   sources_pending NULL  => run mono-source historique : finalisé direct (inchangé).
+  //   sources_pending >= 1  => on décrémente ; 'done' quand le compteur atteint 0.
+  // Les stats (panneau d'exclusions atHome) ne sont écrites que par le POST atHome.
+  const statsForUpdate = sourceTag === "athome" ? mergedStatsJson : null;
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const cur = await client.query<{ results: any; sources_pending: number | null }>(
+      `SELECT results, sources_pending FROM runs WHERE id=$1 FOR UPDATE`,
+      [runId]
+    );
+    const existing = Array.isArray(cur.rows[0]?.results) ? cur.rows[0].results : [];
+    const pending = cur.rows[0]?.sources_pending ?? null;
+    const merged = mergeRunResults(existing, scored).sort(
+      (a: any, b: any) => (b.marginPct ?? -999) - (a.marginPct ?? -999)
+    );
+    const newPending = pending == null ? null : Math.max(pending - 1, 0);
+    const finalStatus = newPending == null || newPending <= 0 ? "done" : "running";
+    await client.query(
+      `UPDATE runs SET
+         count = $2, results = $3, stats = COALESCE($4, stats),
+         sources_pending = $5, status = $6,
+         finished_at = CASE WHEN $6 = 'done' THEN now() ELSE finished_at END
+       WHERE id = $1`,
+      [runId, merged.length, JSON.stringify(merged), statsForUpdate, newPending, finalStatus]
+    );
+    await client.query("COMMIT");
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    client.release();
+    throw e;
+  }
+  client.release();
 
   // S6 Phase 3 — Nouveautes : EVENEMENTS GO/Negocier captures sur TOUT run
   // (manuel ou veille). Le premier run qui voit une nouveaute/baisse cree

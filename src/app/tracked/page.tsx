@@ -53,6 +53,9 @@ type TrackedListing = {
   lng?: number | null;
   address?: string | null;
   loc?: "exact" | "athome" | "quartier";
+  source?: string;          // S14 — 'athome' | 'immotop'
+  alt_source?: string | null; // S14 — 2e annonce du même bien (dédup cross-source)
+  alt_url?: string | null;
 };
 
 const eur = (n: number) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " €";
@@ -458,6 +461,12 @@ export default function TrackedPage() {
                         </td>
                         <td className="cell-main">
                           <a href={l.url} target="_blank" rel="noreferrer">{l.title || l.id}</a>
+                          {l.source === "immotop" && (
+                            <span className="src-badge" title="Source : immotop.lu">immotop</span>
+                          )}
+                          {l.alt_source === "immotop" && l.alt_url && (
+                            <a className="src-badge" href={l.alt_url} target="_blank" rel="noreferrer" title="Aussi listé sur immotop.lu">aussi immotop ↗</a>
+                          )}
                           {l.commune && (
                             <div className="muted" style={{ fontSize: "0.78rem" }}>{l.commune}</div>
                           )}

@@ -38,6 +38,8 @@ export default function NewSearch() {
   const [cpe, setCpe] = useState<string[]>([...CPE]);
   // S13 — quand on filtre par classes, inclure aussi les biens sans note de CPE.
   const [includeNoCpe, setIncludeNoCpe] = useState(false);
+  // S14 — sources de scraping (atHome / immotop). Les deux par défaut.
+  const [sources, setSources] = useState<("athome" | "immotop")[]>(["athome", "immotop"]);
 
   // scoring — S4 : le prix de revente n'est plus ici (calibre par zone dans Reglages).
   const [worksEurPerM2, setWorks] = useState("1500");
@@ -51,6 +53,10 @@ export default function NewSearch() {
 
   function toggleCpe(c: string) {
     setCpe((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
+  }
+
+  function toggleSource(s: "athome" | "immotop") {
+    setSources((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
   }
 
   function buildPayload() {
@@ -68,6 +74,7 @@ export default function NewSearch() {
         cpeClasses: allCpe ? [] : cpe,
         // Sans objet si « Toutes les notes CPE » est actif (déjà tout inclus).
         includeNoCpe: allCpe ? false : includeNoCpe,
+        sources,
       },
       scoring: {
         worksEurPerM2: Number(worksEurPerM2),
@@ -86,6 +93,10 @@ export default function NewSearch() {
     }
     if (!allCpe && cpe.length === 0) {
       setErr("Sélectionne au moins une note CPE, ou réactive « Toutes les notes CPE ».");
+      return;
+    }
+    if (sources.length === 0) {
+      setErr("Sélectionne au moins une source (atHome et/ou immotop).");
       return;
     }
     setBusy(true);
@@ -151,6 +162,17 @@ export default function NewSearch() {
               <option value="both">Les deux</option>
             </select>
           </div>
+        </div>
+
+        <div style={{ marginTop: 16 }}>
+          <label>Sources</label>
+          <div className="chips">
+            <span className={`chip ${sources.includes("athome") ? "on" : ""}`} onClick={() => toggleSource("athome")}>atHome</span>
+            <span className={`chip ${sources.includes("immotop") ? "on" : ""}`} onClick={() => toggleSource("immotop")}>immotop</span>
+          </div>
+          <p className="zone-picker__hint" style={{ marginTop: 6 }}>
+            Les biens présents sur les deux portails sont dédupliqués automatiquement (signalés « atHome + immotop » dans les résultats).
+          </p>
         </div>
 
         <div style={{ marginTop: 18 }}>

@@ -54,6 +54,10 @@ export type Scored = Listing & {
   // S5 — variation vs derniere vue : negatif = baisse (signal nego), null = premiere apparition.
   // Valeur initiale null ; ecrasee par /api/ingest apres lookup DB.
   priceDelta: number | null;
+  // S14 — provenance dans un run multi-sources. 'both' = trouvé sur les 2 portails
+  // (dédup géo). altUrl = lien vers l'annonce de l'autre source. Absent => 'athome'.
+  source?: "athome" | "immotop" | "both";
+  altUrl?: string;
 };
 
 /**
