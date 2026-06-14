@@ -158,3 +158,30 @@ URL de référence (Lux-Ville, apparts anciens 25–75 m², triés par date) :
 https://www.immotop.lu/api-next/search-list/listings/?idContratto=1&idCategoria=1&fkRegione=LU_3&idProvincia=LU_03&idComune=47&__lang=fr&path=%2Fvente-appartements%2Fluxembourg%2F&superficieMinima=25&superficieMassima=75&criterio=dataModifica&ordine=desc&pag=1
 ```
 Workflows jetables de l'étude (archivés après coup) : probe v1→v8 + overlap v1/v2.
+
+---
+
+## 8. État livré (S14, 14/06/2026)
+
+Pipeline immotop **parallèle et isolé** implémenté (atHome inchangé).
+
+**n8n** : workflow **`BBIscout — immotop scraper`** (`xPqCQVlzP8h1BYuN`), **actif**, webhook
+`POST /webhook/scout-immotop`. Scrape api-next (Lux-Ville, exclut neuf + projets),
+normalise au shape `Listing` (photos en taille `xxl`, `cpe:null`), POST vers `/api/ingest-immotop`.
+Testé isolément (runId bidon, ingest noop) : sortie conforme.
+
+**App** :
+- `db.ts` : `listings.source` (`'athome'` défaut | `'immotop'`) + `alt_source/alt_id/alt_url` + index dédup ; `market_samples.source` ; `runs.is_immotop`.
+- `lib/dedup.ts` : haversine + `findDuplicate` (géo<150 m + surface±2 + prix±3 %, fusion 1↔1, jamais sur collision intra-source).
+- `lib/trigger.ts` : `triggerImmotopRun` (no-op si env absent).
+- `app/api/ingest-immotop/route.ts` : route **distincte**, dédup → soit rattache l'annonce immotop à un bien atHome (enrichit, `alt_*`, pas de comp), soit upsert `source='immotop'` + snapshot + scoring (DEFAULT_SCORING) + finding GO/NÉGOCIER + comp (`market_samples`, cpe null).
+- Veille (`/api/cron/run-all`) déclenche aussi immotop (best-effort, isolé).
+- Suivis : badge `immotop` / `aussi immotop ↗`.
+
+**⚙️ À FAIRE par Vincent (Railway, service Next.js)** : poser la variable
+```
+N8N_IMMOTOP_WEBHOOK_URL = https://n8n-production-8929d.up.railway.app/webhook/scout-immotop
+```
+Tant qu'elle est absente, immotop est **désactivé** (no-op) et atHome tourne normalement.
+
+**Suite possible** : extraire le CPE depuis la description (« Isolation thermique: X » vu dans les annonces) ; badge source aussi sur la carte / les résultats ; cadence (aujourd'hui quotidienne via la veille).

@@ -31,6 +31,10 @@ export async function getZoneTree(): Promise<ZoneTree[]> {
 const SLUG_ALIASES: Record<string, string> = {
   "cloche-d-or": "gasperich",
   "gasperich-cloche-d-or": "gasperich",
+  // S14 — macrozones immotop (parfois composées) vers nos quartiers.
+  "ville-haute": "centre-ville",
+  "bonnevoie-verlorenkost": "bonnevoie",
+  "neudorf-weimershof": "neudorf",
 };
 
 /**

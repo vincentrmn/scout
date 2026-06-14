@@ -163,6 +163,46 @@ export async function triggerSurveyRun(base: string): Promise<TriggerResult> {
   return { ok: true, runId };
 }
 
+/**
+ * S14 — Déclenche le scraper immotop (2e source), PIPELINE PARALLÈLE ET ISOLÉ.
+ * Webhook + route d'ingest dédiés : n'impacte jamais le flux atHome. Si
+ * `N8N_IMMOTOP_WEBHOOK_URL` n'est pas configuré, no-op silencieux (aucun run
+ * créé) — atHome continue normalement.
+ */
+export async function triggerImmotopRun(base: string): Promise<TriggerResult> {
+  const webhook = process.env.N8N_IMMOTOP_WEBHOOK_URL;
+  if (!webhook) {
+    return { ok: false, status: 200, error: "N8N_IMMOTOP_WEBHOOK_URL non configuré (immotop désactivé)" };
+  }
+  await ensureSchema();
+
+  const run = await pool.query(
+    `INSERT INTO runs (config_id, config_name, status, is_immotop)
+     VALUES (NULL, 'Immotop — relevé', 'running', true) RETURNING id`
+  );
+  const runId = run.rows[0].id as number;
+
+  const payload = {
+    runId,
+    criteria: { surfaceMin: 25, surfaceMax: 90, maxPages: 50 },
+    ingestUrl: `${base}/api/ingest-immotop`,
+    ingestSecret: process.env.INGEST_SECRET || "",
+  };
+
+  fetch(webhook, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  }).catch(async (e) => {
+    await pool.query(`UPDATE runs SET status='error', error=$2, finished_at=now() WHERE id=$1`, [
+      runId,
+      String(e),
+    ]);
+  });
+
+  return { ok: true, runId };
+}
+
 /** Construit l'origine publique de l'app depuis la requete (fallback PUBLIC_APP_URL). */
 export function resolveBase(req: Request): string {
   if (process.env.PUBLIC_APP_URL) return process.env.PUBLIC_APP_URL;

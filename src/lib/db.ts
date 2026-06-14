@@ -325,6 +325,27 @@ export function ensureSchema(): Promise<void> {
         );
       `);
       await pool.query(`CREATE INDEX IF NOT EXISTS price_proposals_status_idx ON price_proposals (status);`);
+
+      // -------------------------------------------------------------------
+      // S14 — Immotop.lu, 2e source (pipeline PARALLÈLE et isolé).
+      //   source     = portail d'origine du bien ('athome' par défaut | 'immotop').
+      //   alt_source / alt_id / alt_url = 2e annonce du MÊME bien physique
+      //     détectée par dédup géographique (cf. lib/dedup.ts). On conserve les
+      //     deux références ; l'enregistrement reste celui de la source primaire.
+      // Tout est additif : les biens atHome existants gardent source='athome'.
+      // -------------------------------------------------------------------
+      await pool.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'athome';`);
+      await pool.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS alt_source TEXT;`);
+      await pool.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS alt_id TEXT;`);
+      await pool.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS alt_url TEXT;`);
+      // Index de pré-filtrage de la dédup (candidats par prix ; surface/géo affinés en JS).
+      await pool.query(
+        `CREATE INDEX IF NOT EXISTS listings_dedup_idx ON listings (price) WHERE lat IS NOT NULL AND lng IS NOT NULL;`
+      );
+      // market_samples : provenance du comp (évite le double-comptage cross-source).
+      await pool.query(`ALTER TABLE market_samples ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'athome';`);
+      // Run du scraper immotop (parallèle au survey ; n'alimente pas les runs atHome).
+      await pool.query(`ALTER TABLE runs ADD COLUMN IF NOT EXISTS is_immotop BOOLEAN NOT NULL DEFAULT false;`);
     })();
   }
   return global._bbinvestSchema;

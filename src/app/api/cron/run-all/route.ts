@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pool, ensureSchema, reapStaleRuns } from "@/lib/db";
-import { triggerRun, resolveBase } from "@/lib/trigger";
+import { triggerRun, triggerImmotopRun, resolveBase } from "@/lib/trigger";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,5 +34,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  return NextResponse.json({ triggered: rows.length, results });
+  // S14 — Scraper immotop (2e source), pipeline isolé. No-op si l'env n'est pas
+  // configuré ; un échec ici n'affecte pas la veille atHome ci-dessus.
+  let immotop: { ok: boolean; runId?: number; error?: string } | undefined;
+  try {
+    const im = await triggerImmotopRun(base);
+    immotop = im.ok ? { ok: true, runId: im.runId } : { ok: false, error: im.error };
+  } catch (e: any) {
+    immotop = { ok: false, error: String(e?.message ?? e) };
+  }
+
+  return NextResponse.json({ triggered: rows.length, results, immotop });
 }
