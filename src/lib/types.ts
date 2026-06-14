@@ -32,6 +32,9 @@ export type Criteria = {
   /** S14 — filtre d'état de rénovation (immotop uniquement : atHome n'a pas la
    *  donnée). Vide/absent => pas de filtre. Mappé sur le param `stato` immotop. */
   conditions?: ("a_renover" | "habitable" | "renove")[];
+  /** S14 — bande énergie immotop (cumulative « et mieux ») : excellente=1,
+   *  moyenne=5, basse=3 (param `classeEnergetica`). Absent => pas de filtre. */
+  immotopEnergy?: "excellente" | "moyenne" | "basse";
 };
 
 export type ConfigRow = {

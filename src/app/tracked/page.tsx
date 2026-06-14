@@ -465,10 +465,10 @@ export default function TrackedPage() {
                         <td className="cell-main">
                           <a href={l.url} target="_blank" rel="noreferrer">{l.title || l.id}</a>
                           {l.source === "immotop" && (
-                            <span className="src-badge" title="Source : immotop.lu">immotop</span>
+                            <span className="src-badge" title="Source : immotop.lu">Immotop</span>
                           )}
                           {l.alt_source === "immotop" && l.alt_url && (
-                            <a className="src-badge" href={l.alt_url} target="_blank" rel="noreferrer" title="Aussi listé sur immotop.lu">aussi immotop ↗</a>
+                            <a className="src-badge" href={l.alt_url} target="_blank" rel="noreferrer" title="Aussi listé sur immotop.lu">aussi Immotop ↗</a>
                           )}
                           {l.etat && ETAT_LABEL[l.etat] && (
                             <span className={`etat-badge ${l.etat}`}>{ETAT_LABEL[l.etat]}</span>

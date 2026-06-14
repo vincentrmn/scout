@@ -214,4 +214,8 @@ Le formulaire de recherche permet désormais de choisir les **sources** (atHome 
 - `triggerRun` mappe `conditions` → `statoIds` (5/2/6).
 - Formulaire : sélecteur « État du bien » (À rénover / Habitable / Rénové) — **appliqué à immotop uniquement** (atHome n'a pas la donnée).
 - Badge état (résultats + Suivis) ; `market_samples.etat` immotop depuis `ga4Condition` (LLM en fallback si absent).
-- Note : `classeEnergetica` (bandes) non exploité pour l'instant — non aligné sur le C-F BBI.
+
+**Bandes énergie Immotop (S14)** : param `classeEnergetica=<id>`, **cumulatif** (« cette qualité et mieux »), libellés confirmés via `seoData.title` :
+`1` = Excellente (1013) · `5` = Moyenne (1102) · `3` = Basse (1296) · (absent = toutes, 1683). Exposé en sélecteur « Énergie · Immotop » (Toutes/Excellente/Moyenne/Basse). **Pas une classe C-F exacte** — indicatif.
+
+**Formulaire (S14)** : on choisit d'abord la/les **source(s)**, puis le reste apparaît ; filtres regroupés par source — section atHome (classes CPE), section Immotop (énergie en bandes + état). « Immotop » avec majuscule.
