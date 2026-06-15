@@ -376,6 +376,18 @@ export function ensureSchema(): Promise<void> {
         );
       `);
 
+      // S16 — reset unique du 1er balayage « disparus » (trop large : il avait
+      // marqué « parti » des biens encore en ligne, pas re-scrapés depuis que
+      // les relevés quotidiens existent). Le nouveau balayage (conservateur)
+      // re-marquera correctement au fil des jours.
+      {
+        const seen = await pool.query(`SELECT 1 FROM app_settings WHERE key='gone_reset_s16b'`);
+        if (!seen.rows.length) {
+          await pool.query(`UPDATE listings SET market_status='active', gone_at=NULL WHERE market_status='gone'`);
+          await pool.query(`INSERT INTO app_settings (key, value) VALUES ('gone_reset_s16b', 'true'::jsonb) ON CONFLICT (key) DO NOTHING`);
+        }
+      }
+
       // S15 — Nommage cohérent des runs techniques (relevés). Idempotent.
       await pool.query(`UPDATE runs SET config_name='Relevé de marché — atHome' WHERE config_name='Relevé de marché';`);
       await pool.query(`UPDATE runs SET config_name='Relevé de marché — Immotop' WHERE config_name='Immotop — relevé';`);
@@ -399,18 +411,21 @@ export function ensureSchema(): Promise<void> {
  * survey comprise). Idempotent, sans effet sur les runs terminés.
  */
 /**
- * S16 — Marque « parti » (gone) les biens vus dans les relevés larges puis
- * absents depuis ≥ 3 jours (≥ 2 relevés quotidiens manqués). Alimente Marché
- * (vélocité) pour atHome ET Immotop. Limité à la bande couverte par les relevés
- * (surface 18–160) pour éviter de marquer à tort des biens hors périmètre.
+ * S16 — Marque « parti » (gone) les biens vus récemment dans les relevés puis
+ * disparus. Fenêtre CONSERVATRICE pour éviter les faux positifs :
+ *   - absent depuis ≥ 4 jours (plusieurs relevés quotidiens manqués),
+ *   - mais vu il y a ≤ 18 jours (donc activement scrapé récemment — on ne touche
+ *     pas aux vieux biens du référentiel d'avant les relevés quotidiens),
+ *   - dans la bande couverte par les 2 relevés (surface 20–100).
  */
 export async function reapGoneListings(): Promise<void> {
   await pool.query(
     `UPDATE listings
         SET market_status = 'gone', gone_at = last_seen
       WHERE market_status = 'active'
-        AND last_seen < now() - interval '3 days'
-        AND surface BETWEEN 18 AND 160`
+        AND last_seen < now() - interval '4 days'
+        AND last_seen > now() - interval '18 days'
+        AND surface BETWEEN 20 AND 100`
   );
 }
 
