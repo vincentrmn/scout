@@ -150,14 +150,17 @@ export async function triggerSurveyRun(base: string): Promise<TriggerResult> {
     return { ok: false, status: 500, error: "N8N_WEBHOOK_URL non configure", runId };
   }
 
-  // S16 — relevé large : tout Lux-Ville, toutes notes CPE, surfaces larges.
-  // Alimente référentiel + comparables + Marché + Nouveautés (via config).
+  // S16 — relevé atHome : Lux-Ville, CPE C–F (cible rénovation BBI), 20–100 m².
+  // On garde le filtre CPE pour limiter les requêtes « fiche détail » (1/2,5 s)
+  // et tenir le scrape sous le garde-fou des 45 min. La couverture large vient
+  // d'Immotop (pas de fiche détail → rapide). Alimente référentiel + comparables
+  // + Marché + Nouveautés (via la config).
   const criteria: any = {
     locCodes: ["L9-luxembourg"],
     propertyType: "flat",
-    cpeClasses: [],
+    cpeClasses: ["C", "D", "E", "F"],
     surfaceMin: 20,
-    surfaceMax: 150,
+    surfaceMax: 100,
     includeNew: false,
     maxPages: 50,
   };
