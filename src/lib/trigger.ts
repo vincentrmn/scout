@@ -150,12 +150,14 @@ export async function triggerSurveyRun(base: string): Promise<TriggerResult> {
     return { ok: false, status: 500, error: "N8N_WEBHOOK_URL non configure", runId };
   }
 
+  // S16 — relevé large : tout Lux-Ville, toutes notes CPE, surfaces larges.
+  // Alimente référentiel + comparables + Marché + Nouveautés (via config).
   const criteria: any = {
     locCodes: ["L9-luxembourg"],
     propertyType: "flat",
-    cpeClasses: ["C", "D", "E", "F"],
-    surfaceMin: 25,
-    surfaceMax: 75,
+    cpeClasses: [],
+    surfaceMin: 20,
+    surfaceMax: 150,
     includeNew: false,
     maxPages: 50,
   };
@@ -221,7 +223,7 @@ export async function triggerImmotopRun(base: string): Promise<TriggerResult> {
 
   const payload = {
     runId,
-    criteria: { surfaceMin: 25, surfaceMax: 90, maxPages: 50 },
+    criteria: { surfaceMin: 20, surfaceMax: 150, maxPages: 50 },
     ingestUrl: `${base}/api/ingest-immotop`,
     ingestSecret: process.env.INGEST_SECRET || "",
   };

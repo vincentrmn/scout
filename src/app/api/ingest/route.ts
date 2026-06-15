@@ -5,6 +5,7 @@ import { getZonePriceMap, resolveResalePerM2, quartierSlug } from "@/lib/zones";
 import { classifyEtat, hasAnthropicKey } from "@/lib/classify";
 import { generateProposals } from "@/lib/proposals";
 import { isSameProperty } from "@/lib/dedup";
+import { getNouveautesConfig, matchesNouveautesCriteria } from "@/lib/nouveautes";
 import type { RunStats } from "@/lib/types";
 
 // S14 — fusion des résultats d'un run multi-sources. `existing` (déjà présents,
@@ -165,10 +166,11 @@ export async function POST(req: NextRequest) {
            lat     = COALESCE(EXCLUDED.lat, listings.lat),
            lng     = COALESCE(EXCLUDED.lng, listings.lng),
            etat    = COALESCE(EXCLUDED.etat, listings.etat),
-           -- S15 — un bien revu actif (re-listé) repasse 'active'.
+           -- S15/S16 — un bien revu actif (re-listé) repasse 'active'.
            market_status = 'active',
            sold_at = NULL,
            sold_price = NULL,
+           gone_at = NULL,
            address = CASE
              WHEN EXCLUDED.address IS NOT NULL AND EXCLUDED.address <> '' THEN EXCLUDED.address
              ELSE listings.address
@@ -214,6 +216,34 @@ export async function POST(req: NextRequest) {
       `UPDATE runs SET status='done', count=$2, stats=$3, finished_at=now() WHERE id=$1`,
       [runId, filtered.length, mergedStatsJson]
     );
+
+    // S16 — Nouveautés : sur le relevé large atHome, on émet un finding pour les
+    // biens qui matchent la config Nouveautés (critères + verdict). Best-effort.
+    try {
+      const nvCfg = await getNouveautesConfig();
+      const priceMap = await getZonePriceMap();
+      const events: Array<{ lid: string; verdict: string; margin: number; price: number; prev: number | null }> = [];
+      for (const l of items) {
+        if (!matchesNouveautesCriteria(l, nvCfg)) continue;
+        const { resalePerM2, priceIsDefault } = resolveResalePerM2(l.commune, priceMap);
+        const sc = scoreListing(l, nvCfg.scoring, resalePerM2, priceIsDefault);
+        if (!nvCfg.verdicts.includes(sc.verdict as any)) continue;
+        const prev = prevPriceMap.get(l.id);
+        if (prev === undefined) events.push({ lid: l.id, verdict: sc.verdict, margin: sc.marginPct, price: l.price, prev: null });
+        else if (l.price < prev) events.push({ lid: l.id, verdict: sc.verdict, margin: sc.marginPct, price: l.price, prev });
+      }
+      await Promise.all(
+        events.map((e) =>
+          pool.query(
+            `INSERT INTO findings (listing_id, run_id, config_name, kind, verdict, margin_pct, price, prev_price)
+             VALUES ($1, $2, 'Relevé — atHome', $3, $4, $5, $6, $7)`,
+            [e.lid, runId, e.prev != null ? "price_drop" : "new", e.verdict, e.margin, e.price, e.prev]
+          )
+        )
+      );
+    } catch (e) {
+      console.error("[ingest survey nouveautes]", e);
+    }
 
     // S12 Phase 3 — classification LLM (séquentielle, ~5 req/s), best-effort :
     // un échec laisse etat NULL sans bloquer. Ne tourne que si la clé est posée.

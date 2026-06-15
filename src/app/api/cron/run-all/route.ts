@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { pool, ensureSchema, reapStaleRuns } from "@/lib/db";
-import { triggerRun, triggerImmotopRun, resolveBase } from "@/lib/trigger";
+import { ensureSchema, reapStaleRuns, reapGoneListings } from "@/lib/db";
+import { triggerSurveyRun, triggerImmotopRun, resolveBase } from "@/lib/trigger";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // POST /api/cron/run-all  (header: x-cron-secret)
-// Appele par n8n (Schedule) chaque matin. Relance toutes les configs en veille,
-// chaque run marque is_watch=true (=> alimente les Nouveautes en Phase 3).
-// Public au niveau middleware, protege ici par CRON_SECRET.
+// S16 — Veille quotidienne unifiée : 2 relevés LARGES (atHome + Immotop) qui
+// scrapent tout Lux-Ville et alimentent Référentiel + Comparables (Prix de
+// revente) + Marché + Nouveautés (via la config Nouveautés). Plus de veille
+// par recherche sauvegardée (les recherches gardent leur « Relancer » manuel).
 export async function POST(req: NextRequest) {
   const expected = process.env.CRON_SECRET || "";
   const got = req.headers.get("x-cron-secret") || "";
@@ -18,24 +19,13 @@ export async function POST(req: NextRequest) {
 
   await ensureSchema();
   await reapStaleRuns(); // clôture les runs précédents restés bloqués sans réponse n8n
+  await reapGoneListings(); // S16 — marque « parti » les biens absents depuis ≥3 j (Marché)
   const base = resolveBase(req);
 
-  const { rows } = await pool.query<{ id: number; name: string }>(
-    `SELECT id, name FROM configs WHERE watch_enabled = true ORDER BY id`
-  );
+  // Relevé large atHome (référentiel + comps + Marché + Nouveautés).
+  const atHome = await triggerSurveyRun(base);
 
-  const results: Array<{ configId: number; name: string; ok: boolean; runId?: number; error?: string }> = [];
-  for (const c of rows) {
-    const r = await triggerRun(c.id, { base, isWatch: true });
-    results.push(
-      r.ok
-        ? { configId: c.id, name: c.name, ok: true, runId: r.runId }
-        : { configId: c.id, name: c.name, ok: false, error: r.error }
-    );
-  }
-
-  // S14 — Scraper immotop (2e source), pipeline isolé. No-op si l'env n'est pas
-  // configuré ; un échec ici n'affecte pas la veille atHome ci-dessus.
+  // Relevé large Immotop (best-effort, isolé). No-op si l'env n'est pas configuré.
   let immotop: { ok: boolean; runId?: number; error?: string } | undefined;
   try {
     const im = await triggerImmotopRun(base);
@@ -44,5 +34,8 @@ export async function POST(req: NextRequest) {
     immotop = { ok: false, error: String(e?.message ?? e) };
   }
 
-  return NextResponse.json({ triggered: rows.length, results, immotop });
+  return NextResponse.json({
+    atHome: atHome.ok ? { runId: atHome.runId } : { error: atHome.error },
+    immotop,
+  });
 }

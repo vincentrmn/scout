@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ensureSchema } from "@/lib/db";
-import { triggerSurveyRun, resolveBase } from "@/lib/trigger";
 import { fetchActesVille } from "@/lib/observatoire";
 
 export const runtime = "nodejs";
@@ -19,17 +18,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "secret invalide" }, { status: 401 });
     }
     await ensureSchema();
-    const base = resolveBase(req);
 
-    const survey = await triggerSurveyRun(base);
+    // S16 — Le scraping (relevés larges) est passé en quotidien (run-all).
+    // Ce cron hebdo ne fait plus que rafraîchir la donnée Observatoire (actes
+    // notariés), qui ne bouge pas souvent.
     const obs = await fetchActesVille();
 
-    return NextResponse.json({
-      ok: true,
-      survey: survey.ok ? { runId: survey.runId } : { error: survey.error },
-      observatoire: obs,
-      note: "Propositions régénérées à la fin de l'ingest du relevé.",
-    });
+    return NextResponse.json({ ok: true, observatoire: obs });
   } catch (err: any) {
     console.error("[POST /api/cron/market-survey]", err);
     return NextResponse.json({ error: err?.message ?? "Erreur serveur" }, { status: 500 });

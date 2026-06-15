@@ -361,6 +361,21 @@ export function ensureSchema(): Promise<void> {
       await pool.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS sold_price INTEGER;`);
       await pool.query(`CREATE INDEX IF NOT EXISTS listings_sold_idx ON listings (sold_at DESC) WHERE market_status = 'sold';`);
 
+      // S16 — « disparu » : un bien vu dans les relevés larges puis absent (≥3 j)
+      // est présumé parti (vendu/retiré). Alimente Marché aussi pour Immotop
+      // (qui n'a pas de flag vendu). gone_at = dernière fois où on l'a vu.
+      await pool.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS gone_at TIMESTAMPTZ;`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS listings_gone_idx ON listings (gone_at DESC) WHERE market_status = 'gone';`);
+
+      // S16 — Réglages applicatifs (clé -> JSONB). Porte la « config Nouveautés ».
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS app_settings (
+          key        TEXT PRIMARY KEY,
+          value      JSONB NOT NULL,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+      `);
+
       // S15 — Nommage cohérent des runs techniques (relevés). Idempotent.
       await pool.query(`UPDATE runs SET config_name='Relevé de marché — atHome' WHERE config_name='Relevé de marché';`);
       await pool.query(`UPDATE runs SET config_name='Relevé de marché — Immotop' WHERE config_name='Immotop — relevé';`);
@@ -383,6 +398,22 @@ export function ensureSchema(): Promise<void> {
  * tout run resté « running » plus de 45 min (au-delà de tout scrape légitime,
  * survey comprise). Idempotent, sans effet sur les runs terminés.
  */
+/**
+ * S16 — Marque « parti » (gone) les biens vus dans les relevés larges puis
+ * absents depuis ≥ 3 jours (≥ 2 relevés quotidiens manqués). Alimente Marché
+ * (vélocité) pour atHome ET Immotop. Limité à la bande couverte par les relevés
+ * (surface 18–160) pour éviter de marquer à tort des biens hors périmètre.
+ */
+export async function reapGoneListings(): Promise<void> {
+  await pool.query(
+    `UPDATE listings
+        SET market_status = 'gone', gone_at = last_seen
+      WHERE market_status = 'active'
+        AND last_seen < now() - interval '3 days'
+        AND surface BETWEEN 18 AND 160`
+  );
+}
+
 export async function reapStaleRuns(): Promise<void> {
   await pool.query(
     `UPDATE runs
