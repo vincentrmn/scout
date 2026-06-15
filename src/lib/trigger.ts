@@ -137,7 +137,7 @@ export async function triggerSurveyRun(base: string): Promise<TriggerResult> {
 
   const run = await pool.query(
     `INSERT INTO runs (config_id, config_name, status, is_survey)
-     VALUES (NULL, 'Relevé de marché', 'running', true) RETURNING id`
+     VALUES (NULL, 'Relevé de marché — atHome', 'running', true) RETURNING id`
   );
   const runId = run.rows[0].id as number;
 
@@ -215,7 +215,7 @@ export async function triggerImmotopRun(base: string): Promise<TriggerResult> {
 
   const run = await pool.query(
     `INSERT INTO runs (config_id, config_name, status, is_immotop)
-     VALUES (NULL, 'Immotop — relevé', 'running', true) RETURNING id`
+     VALUES (NULL, 'Relevé de marché — Immotop', 'running', true) RETURNING id`
   );
   const runId = run.rows[0].id as number;
 
