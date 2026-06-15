@@ -30,11 +30,36 @@ const VERDICT_LABEL: Record<Finding["verdict"], string> = {
   NEGOCIER: "Négocier",
 };
 
+const CPE_LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H", "I"];
+const ETATS: [string, string][] = [["a_renover", "À rénover"], ["habitable", "Habitable"], ["renove", "Rénové"]];
+
 export default function NouveautesPage() {
   const [data, setData] = useState<Payload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [tracked, setTracked] = useState<Set<string>>(new Set());
+  // S16 — config Nouveautés (réglable).
+  const [cfg, setCfg] = useState<any | null>(null);
+  const [showCfg, setShowCfg] = useState(false);
+  const [cfgSaved, setCfgSaved] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/nouveautes-config").then((r) => r.json()).then(setCfg).catch(() => {});
+  }, []);
+
+  const saveCfg = async () => {
+    if (!cfg) return;
+    await fetch("/api/nouveautes-config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(cfg),
+    }).catch(() => {});
+    setCfgSaved(true);
+    setTimeout(() => setCfgSaved(false), 2500);
+  };
+  const setF = (k: string, v: any) => setCfg((c: any) => ({ ...c, [k]: v }));
+  const setScore = (k: string, v: any) => setCfg((c: any) => ({ ...c, scoring: { ...c.scoring, [k]: v } }));
+  const toggleIn = (arr: string[], x: string) => (arr.includes(x) ? arr.filter((y) => y !== x) : [...arr, x]);
 
   const load = async (p: number) => {
     setError(null);
@@ -77,6 +102,52 @@ export default function NouveautesPage() {
           <a className="btn ghost" href="/">← Retour</a>
         </div>
       </div>
+
+      {cfg && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }} onClick={() => setShowCfg((s) => !s)}>
+            <strong>⚙ Régler les Nouveautés</strong>
+            <span className="muted" style={{ fontSize: "0.8rem" }}>{showCfg ? "Replier ▲" : "Déplier ▼"}</span>
+          </div>
+          {showCfg && (
+            <div style={{ marginTop: 14 }}>
+              <p className="muted" style={{ fontSize: "0.82rem", marginTop: 0 }}>
+                Sur tous les biens des relevés (atHome + Immotop), seuls ceux qui matchent ces critères remontent en Nouveautés.
+              </p>
+              <div className="row">
+                <div><label>Surface min</label><input type="number" value={cfg.surfaceMin ?? ""} onChange={(e) => setF("surfaceMin", e.target.value === "" ? null : Number(e.target.value))} /></div>
+                <div><label>Surface max</label><input type="number" value={cfg.surfaceMax ?? ""} onChange={(e) => setF("surfaceMax", e.target.value === "" ? null : Number(e.target.value))} /></div>
+                <div><label>Prix min (€)</label><input type="number" value={cfg.priceMin ?? ""} onChange={(e) => setF("priceMin", e.target.value === "" ? null : Number(e.target.value))} /></div>
+                <div><label>Prix max (€)</label><input type="number" value={cfg.priceMax ?? ""} onChange={(e) => setF("priceMax", e.target.value === "" ? null : Number(e.target.value))} /></div>
+              </div>
+              <div style={{ marginTop: 12 }}>
+                <label>Classes CPE — vide = toutes (s'applique à atHome)</label>
+                <div className="chips">{CPE_LETTERS.map((c) => <span key={c} className={`chip ${cfg.cpeClasses?.includes(c) ? "on" : ""}`} onClick={() => setF("cpeClasses", toggleIn(cfg.cpeClasses || [], c))}>{c}</span>)}</div>
+              </div>
+              <div style={{ marginTop: 12 }}>
+                <label>État — vide = tous (s'applique à Immotop)</label>
+                <div className="chips">{ETATS.map(([k, lbl]) => <span key={k} className={`chip ${cfg.conditions?.includes(k) ? "on" : ""}`} onClick={() => setF("conditions", toggleIn(cfg.conditions || [], k))}>{lbl}</span>)}</div>
+              </div>
+              <div style={{ marginTop: 12 }}>
+                <label>Verdict retenu</label>
+                <div className="chips">{[["GO", "OK"], ["NEGOCIER", "Négocier"]].map(([k, lbl]) => <span key={k} className={`chip ${cfg.verdicts?.includes(k) ? "on" : ""}`} onClick={() => setF("verdicts", toggleIn(cfg.verdicts || [], k))}>{lbl}</span>)}</div>
+              </div>
+              <div className="section-title" style={{ marginTop: 18 }}><h2 style={{ fontSize: "0.95rem" }}>Hypothèses de scoring</h2><span className="rule" /></div>
+              <div className="row">
+                <div><label>Travaux (€/m²)</label><input type="number" value={cfg.scoring?.worksEurPerM2 ?? ""} onChange={(e) => setScore("worksEurPerM2", Number(e.target.value))} /></div>
+                <div><label>TVA travaux (%)</label><input type="number" value={Math.round((cfg.scoring?.worksVatPct ?? 0) * 100)} onChange={(e) => setScore("worksVatPct", Number(e.target.value) / 100)} /></div>
+                <div><label>Frais acquisition (%)</label><input type="number" value={Math.round((cfg.scoring?.notaryPct ?? 0) * 100)} onChange={(e) => setScore("notaryPct", Number(e.target.value) / 100)} /></div>
+                <div><label>Frais revente (%)</label><input type="number" value={Math.round((cfg.scoring?.resaleAgencyPct ?? 0) * 100)} onChange={(e) => setScore("resaleAgencyPct", Number(e.target.value) / 100)} /></div>
+                <div><label>Marge cible (%)</label><input type="number" value={Math.round((cfg.scoring?.targetMarginPct ?? 0) * 100)} onChange={(e) => setScore("targetMarginPct", Number(e.target.value) / 100)} /></div>
+              </div>
+              <div style={{ marginTop: 16, display: "flex", gap: 12, alignItems: "center" }}>
+                <button className="btn clay" onClick={saveCfg}>Enregistrer</button>
+                {cfgSaved && <span className="muted" style={{ color: "var(--green-ink)" }}>✓ Enregistré</span>}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {data === null && error === null && <p className="empty">Chargement…</p>}
 

@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 type Velocity = { slug: string; count: number; medianDays: number | null; medianDecote: number | null };
 type SoldItem = {
   id: string; title: string | null; url: string | null; commune: string | null;
-  surface: number | null; soldPrice: number | null; firstPrice: number | null;
-  days: number; decote: number | null; tracked: boolean; source: string | null; soldAt: string;
+  surface: number | null; exitPrice: number | null; firstPrice: number | null;
+  days: number; decote: number | null; tracked: boolean; source: string | null;
+  status: string; leftAt: string;
 };
 type Payload = { velocity: Velocity[]; recent: SoldItem[]; labels: Record<string, string> };
 
@@ -45,8 +46,8 @@ export default function MarchePage() {
 
       {data && !hasData && (
         <p className="empty">
-          Pas encore de données de vente. Dès qu'un bien repéré par tes veilles passe « vendu » sur atHome,
-          il est enregistré ici (durée de vente, décote). Ça se construit au fil des semaines — reviens bientôt.
+          Pas encore de données. Dès qu'un bien repéré par les relevés est « vendu » (atHome) ou disparaît
+          (atHome + Immotop), il est enregistré ici (durée, décote). Ça se construit au fil des jours — reviens bientôt.
         </p>
       )}
 
@@ -93,7 +94,8 @@ export default function MarchePage() {
                   <thead>
                     <tr>
                       <th>Bien</th>
-                      <th className="num">Prix de vente</th>
+                      <th>Statut</th>
+                      <th className="num">Prix de sortie</th>
                       <th className="num">m²</th>
                       <th className="num">Sur le marché</th>
                       <th className="num">Décote</th>
@@ -112,11 +114,16 @@ export default function MarchePage() {
                           {s.tracked && <span className="src-badge" title="Bien que tu suivais">★ suivi</span>}
                           {s.commune && <div className="muted" style={{ fontSize: "0.78rem" }}>{s.commune}</div>}
                         </td>
-                        <td className="num" data-label="Prix de vente">{s.soldPrice != null ? eur(s.soldPrice) : "—"}</td>
+                        <td data-label="Statut">
+                          <span className={`etat-badge ${s.status === "sold" ? "renove" : "a_renover"}`} title={s.status === "sold" ? "Marqué vendu sur atHome" : "Disparu des relevés (présumé parti)"}>
+                            {s.status === "sold" ? "Vendu" : "Parti"}
+                          </span>
+                        </td>
+                        <td className="num" data-label="Prix de sortie">{s.exitPrice != null ? eur(s.exitPrice) : "—"}</td>
                         <td className="num" data-label="m²">{s.surface ?? "—"}</td>
                         <td className="num" data-label="Sur le marché">{s.days >= 3 ? `${s.days} j` : "—"}</td>
                         <td className="num" data-label="Décote">{s.decote != null && s.decote !== 0 ? `−${s.decote}%` : "—"}</td>
-                        <td data-label="Le"><span className="muted" style={{ fontSize: "0.82rem" }}>{new Date(s.soldAt).toLocaleDateString("fr-FR")}</span></td>
+                        <td data-label="Le"><span className="muted" style={{ fontSize: "0.82rem" }}>{new Date(s.leftAt).toLocaleDateString("fr-FR")}</span></td>
                       </tr>
                     ))}
                   </tbody>

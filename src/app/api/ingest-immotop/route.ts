@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pool, ensureSchema } from "@/lib/db";
-import { scoreListing, DEFAULT_SCORING, type Listing } from "@/lib/scoring";
+import { scoreListing, type Listing } from "@/lib/scoring";
 import { getZonePriceMap, resolveResalePerM2, quartierSlug } from "@/lib/zones";
 import { classifyEtat, hasAnthropicKey } from "@/lib/classify";
 import { generateProposals } from "@/lib/proposals";
 import { findDuplicate, type DedupCandidate } from "@/lib/dedup";
+import { getNouveautesConfig, matchesNouveautesCriteria } from "@/lib/nouveautes";
 import type { RunStats } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -162,6 +163,8 @@ export async function POST(req: NextRequest) {
              lat     = COALESCE(EXCLUDED.lat, listings.lat),
              lng     = COALESCE(EXCLUDED.lng, listings.lng),
              etat    = COALESCE(EXCLUDED.etat, listings.etat),
+             market_status = 'active',
+             gone_at = NULL,
              address = CASE WHEN EXCLUDED.address IS NOT NULL AND EXCLUDED.address <> '' THEN EXCLUDED.address ELSE listings.address END`,
           [
             lid,
@@ -194,23 +197,24 @@ export async function POST(req: NextRequest) {
         )
     );
 
-    // --- Scoring + Nouveautés (DEFAULT_SCORING) sur les biens autonomes. ---
+    // --- Nouveautés : findings sur les biens qui matchent la config Nouveautés. ---
     const priceMap = await getZonePriceMap();
+    const nvCfg = await getNouveautesConfig();
     type Ev = { lid: string; verdict: string; margin: number; price: number };
     const events: Ev[] = [];
     for (const { l, lid } of withId) {
+      if (!matchesNouveautesCriteria(l, nvCfg)) continue;
       const { resalePerM2, priceIsDefault } = resolveResalePerM2(l.commune, priceMap);
-      const sc = scoreListing(l, DEFAULT_SCORING, resalePerM2, priceIsDefault);
-      if (sc.verdict === "GO" || sc.verdict === "NEGOCIER") {
-        const prev = prevPriceMap.get(lid);
-        if (prev === undefined) events.push({ lid, verdict: sc.verdict, margin: sc.marginPct, price: l.price });
-      }
+      const sc = scoreListing(l, nvCfg.scoring, resalePerM2, priceIsDefault);
+      if (!nvCfg.verdicts.includes(sc.verdict as any)) continue;
+      const prev = prevPriceMap.get(lid);
+      if (prev === undefined) events.push({ lid, verdict: sc.verdict, margin: sc.marginPct, price: l.price });
     }
     await Promise.all(
       events.map((e) =>
         pool.query(
           `INSERT INTO findings (listing_id, run_id, config_name, kind, verdict, margin_pct, price, prev_price)
-           VALUES ($1, $2, 'Immotop', 'new', $3, $4, $5, NULL)`,
+           VALUES ($1, $2, 'Relevé — Immotop', 'new', $3, $4, $5, NULL)`,
           [e.lid, runId, e.verdict, e.margin, e.price]
         )
       )
