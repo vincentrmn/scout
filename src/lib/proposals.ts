@@ -1,6 +1,9 @@
-// S12 — Génération des propositions de prix de revente par quartier.
-// Méthode : comps terrain (market_samples 12 sem.) -> prix affiché cible
-// (rénové médiane / P75 / cluster / ville) × (1 − décote), arrondi 50 € inf.
+// S12/S16 — Génération des propositions de prix de revente par quartier.
+// Méthode (révisée S16) : le prix de revente = MÉDIANE DES BIENS RÉNOVÉS du
+// quartier (la seule vraie preuve « à combien se revend un bien refait »).
+// Plus de P75-de-tout (qui était gonflé par le luxe/neuf/indéterminés).
+// Repli si < 3 rénovés : rénovés du cluster voisin -> référence Observatoire.
+// Sinon : pas de proposition (mieux vaut rien qu'un prix faux). × (1 − décote).
 import { pool } from "@/lib/db";
 import { getDecote, type Decote } from "@/lib/observatoire";
 
@@ -19,6 +22,8 @@ export const CLUSTERS: string[][] = [
 function clusterOf(slug: string): string[] | null {
   return CLUSTERS.find((c) => c.includes(slug)) ?? null;
 }
+
+const RENOVE_MIN = 3; // seuil : 3 rénovés suffisent pour faire foi.
 
 type Comp = {
   listing_id: string;
@@ -44,6 +49,9 @@ async function loadComps(): Promise<Comp[]> {
       AND surface BETWEEN 30 AND 70
       AND (cpe IS NULL OR cpe IN ('C','D','E','F'))
       AND price_m2 IS NOT NULL
+      -- S16 : on écarte les « indéterminés » (ni CPE ni état) qui polluent
+      -- (surtout des biens Immotop sans note, souvent haut de gamme).
+      AND NOT (cpe IS NULL AND etat IS NULL)
     ORDER BY listing_id, observed_at DESC
   `);
   return rows;
@@ -57,16 +65,12 @@ function pct(values: number[], p: number): number | null {
   return lo === hi ? s[lo] : s[lo] + (s[hi] - s[lo]) * (idx - lo);
 }
 
-// Applique la règle "rénové médiane (≥8) sinon P75 tous (≥12)" sur un jeu de comps.
-function applyRule(comps: Comp[]): { value: number; basis: "renove" | "p75"; used: Comp[] } | null {
+// S16 — médiane des rénovés (≥ RENOVE_MIN), sinon null. C'est LA base du prix.
+function renoveMedian(comps: Comp[]): { value: number; used: Comp[] } | null {
   const renove = comps.filter((c) => c.etat === "renove");
-  if (renove.length >= 8) {
+  if (renove.length >= RENOVE_MIN) {
     const v = pct(renove.map((c) => c.price_m2), 50);
-    if (v != null) return { value: v, basis: "renove", used: renove };
-  }
-  if (comps.length >= 12) {
-    const v = pct(comps.map((c) => c.price_m2), 75);
-    if (v != null) return { value: v, basis: "p75", used: comps };
+    if (v != null) return { value: v, used: renove };
   }
   return null;
 }
@@ -88,40 +92,38 @@ function compDetail(c: Comp) {
 }
 
 export type ProposalCalc = {
-  level: "quartier_renove" | "quartier_p75" | "vdl" | "cluster" | "ville";
-  basis: "renove" | "p75" | "reference";
+  level: "quartier_renove" | "cluster" | "vdl";
+  basis: "renove" | "reference";
   n_used: number;
   cible_eur_m2: number;
   percentiles: { p25: number | null; median: number | null; p75: number | null };
   decote: Decote;
   proposed_eur_m2: number;
   current_eur_m2: number | null;
-  vdl_ref: number | null; // référence affichée VdL 2025 du quartier (cross-check)
-  confidence: number; // note de confiance 0–100
-  confidence_reason: string; // facteurs ayant fait la note
+  vdl_ref: number | null;
+  confidence: number;
+  confidence_reason: string;
   formula: string;
   comps: ReturnType<typeof compDetail>[];
   generated_at: string;
 };
 
 // Note de confiance 0–100 = base(niveau) × taille(n) × dispersion × décote.
-// Jamais 100 (on n'est jamais certain).
 function computeConfidence(
   level: ProposalCalc["level"],
-  basis: "renove" | "p75" | "reference",
+  basis: "renove" | "reference",
   n: number,
   pctl: { p25: number | null; median: number | null; p75: number | null },
   decote: Decote
 ): { confidence: number; confidence_reason: string } {
   const BASE: Record<ProposalCalc["level"], number> = {
-    quartier_renove: 95, quartier_p75: 80, vdl: 60, cluster: 60, ville: 40,
+    quartier_renove: 92, cluster: 65, vdl: 55,
   };
   const base = BASE[level] ?? 50;
 
   let fN = 1;
-  if (basis !== "reference") {
-    const nCible = basis === "renove" ? 8 : 20;
-    fN = Math.max(0.6, Math.min(1, 0.6 + 0.4 * Math.min(1, n / nCible)));
+  if (basis === "renove") {
+    fN = Math.max(0.6, Math.min(1, 0.6 + 0.4 * Math.min(1, n / 8)));
   }
 
   let fDisp = 1;
@@ -135,18 +137,16 @@ function computeConfidence(
 
   const levelLabel =
     level === "quartier_renove" ? "médiane rénové"
-    : level === "quartier_p75" ? "P75 quartier"
-    : level === "vdl" ? "réf Observatoire"
-    : level === "cluster" ? `cluster (${basis === "renove" ? "médiane rénové" : "P75"})`
-    : "P75 ville";
+    : level === "cluster" ? "médiane rénové (cluster)"
+    : "réf Observatoire";
   const parts = [levelLabel];
-  if (basis !== "reference") parts.push(`${n} comps`);
+  if (basis === "renove") parts.push(`${n} rénovés`);
   if (fDisp < 0.95) parts.push("dispersion large");
   if (fDecote < 1) parts.push("décote fallback");
   return { confidence, confidence_reason: parts.join(" · ") };
 }
 
-/** Calcule la proposition d'un quartier (ou null si aucun comp exploitable). */
+/** Calcule la proposition d'un quartier (ou null si aucune base fiable). */
 export function computeQuartier(
   slug: string,
   comps: Comp[],
@@ -157,28 +157,23 @@ export function computeQuartier(
   const here = comps.filter((c) => c.quartier_slug === slug);
 
   let level: ProposalCalc["level"];
-  let r = applyRule(here);
   let used: Comp[];
   let cible: number;
-  let basis: "renove" | "p75" | "reference";
+  let basis: "renove" | "reference";
 
-  if (r) {
-    level = r.basis === "renove" ? "quartier_renove" : "quartier_p75";
-    used = r.used; cible = r.value; basis = r.basis;
-  } else if (announcedRef != null && announcedRef > 0) {
-    // Repli prioritaire : référence officielle VdL du quartier (prix affiché).
-    level = "vdl"; used = []; cible = announcedRef; basis = "reference";
+  const rq = renoveMedian(here);
+  if (rq) {
+    level = "quartier_renove"; used = rq.used; cible = rq.value; basis = "renove";
   } else {
     const cl = clusterOf(slug);
-    const clusterComps = cl ? comps.filter((c) => cl.includes(c.quartier_slug)) : [];
-    const rc = cl ? applyRule(clusterComps) : null;
+    const rc = cl ? renoveMedian(comps.filter((c) => cl.includes(c.quartier_slug))) : null;
     if (rc) {
-      level = "cluster"; used = rc.used; cible = rc.value; basis = rc.basis;
+      level = "cluster"; used = rc.used; cible = rc.value; basis = "renove";
+    } else if (announcedRef != null && announcedRef > 0) {
+      level = "vdl"; used = []; cible = announcedRef; basis = "reference";
     } else {
-      // Ville : P75 de tous les comps (dernier recours).
-      const v = pct(comps.map((c) => c.price_m2), 75);
-      if (v == null) return null;
-      level = "ville"; used = comps; cible = v; basis = "p75";
+      // Aucune base fiable (pas de rénovés, pas de réf) -> pas de proposition.
+      return null;
     }
   }
 
@@ -188,9 +183,9 @@ export function computeQuartier(
 
   const fmtEur = (n: number) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   const cibleLabel =
-    basis === "renove" ? `médiane rénové (n=${used.length})`
-    : basis === "p75" ? `P75 (n=${used.length})`
-    : `référence Observatoire 2025`;
+    basis === "renove"
+      ? `médiane rénové (n=${used.length}${level === "cluster" ? ", cluster" : ""})`
+      : `référence Observatoire`;
   const formula =
     `${cibleLabel} = ${fmtEur(cible)} €/m² × (1 − ${Math.round(decote.decote * 1000) / 10} %` +
     `${decote.source === "fallback" ? " fallback" : ""}) = ${fmtEur(cible * (1 - decote.decote))} → arrondi ${fmtEur(proposed)} €/m²`;
@@ -216,9 +211,6 @@ export async function generateProposals(): Promise<{ created: number; total: num
   const decote = await getDecote();
   const comps = await loadComps();
 
-  // Ville (parent) + quartiers : prix courant + référence Observatoire (zones).
-  // La ville reçoit aussi une proposition (réf Observatoire ville × décote),
-  // pour disposer d'un prix « ville » unique à valider comme les quartiers.
   const { rows: allZones } = await pool.query<{ id: string; parent_id: string | null; resale: string | null; announced: string | null }>(
     `SELECT id, parent_id, resale_eur_per_m2::float AS resale, announced_eur_per_m2::float AS announced FROM zones`
   );
