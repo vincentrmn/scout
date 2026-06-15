@@ -360,6 +360,10 @@ export function ensureSchema(): Promise<void> {
       await pool.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS sold_at TIMESTAMPTZ;`);
       await pool.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS sold_price INTEGER;`);
       await pool.query(`CREATE INDEX IF NOT EXISTS listings_sold_idx ON listings (sold_at DESC) WHERE market_status = 'sold';`);
+
+      // S15 — Nommage cohérent des runs techniques (relevés). Idempotent.
+      await pool.query(`UPDATE runs SET config_name='Relevé de marché — atHome' WHERE config_name='Relevé de marché';`);
+      await pool.query(`UPDATE runs SET config_name='Relevé de marché — Immotop' WHERE config_name='Immotop — relevé';`);
       // Run du scraper immotop (parallèle au survey ; n'alimente pas les runs atHome).
       await pool.query(`ALTER TABLE runs ADD COLUMN IF NOT EXISTS is_immotop BOOLEAN NOT NULL DEFAULT false;`);
       // S14 — recherche multi-sources : nb de sources dont on attend encore le POST.
