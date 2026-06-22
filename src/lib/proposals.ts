@@ -221,7 +221,7 @@ export async function generateProposals(): Promise<{ created: number; total: num
   // du quartier × 1,45 n'est PAS un comparable de revente rénové (c'est du neuf ou
   // du haut de gamme — le flag isNew d'Immotop étant peu fiable, on filtre par PRIX,
   // qui ne ment pas). Garde-fou robuste, indépendant des flags.
-  const CAP = 1.45;
+  const CAP = 1.35;
   const refMap = new Map<string, number>();
   for (const z of allZones) if (z.announced != null && Number(z.announced) > 0) refMap.set(z.id, Number(z.announced));
   const cityRef = cityZone?.announced != null ? Number(cityZone.announced) : null;
