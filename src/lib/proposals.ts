@@ -47,10 +47,13 @@ async function loadComps(): Promise<Comp[]> {
     FROM market_samples
     WHERE observed_at > now() - interval '84 days'
       AND surface BETWEEN 30 AND 70
-      AND (cpe IS NULL OR cpe IN ('C','D','E','F'))
       AND price_m2 IS NOT NULL
-      -- S16 : on écarte les « indéterminés » (ni CPE ni état) qui polluent
-      -- (surtout des biens Immotop sans note, souvent haut de gamme).
+      -- S16 : prix de revente piloté UNIQUEMENT par atHome. Le CPE C-F garantit
+      -- des biens ANCIENS (un neuf est toujours A/B) → impossible qu'un neuf y
+      -- entre. Immotop n'a ni CPE fiable ni flag « rénové » propre (« Ottimo /
+      -- Ristrutturato » mélange rénové-ancien et neuf-excellent) → exclu du prix.
+      AND source = 'athome'
+      AND (cpe IS NULL OR cpe IN ('C','D','E','F'))
       AND NOT (cpe IS NULL AND etat IS NULL)
     ORDER BY listing_id, observed_at DESC
   `);
