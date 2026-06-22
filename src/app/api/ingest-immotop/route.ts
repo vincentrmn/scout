@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pool, ensureSchema } from "@/lib/db";
 import { scoreListing, type Listing } from "@/lib/scoring";
-import { getZonePriceMap, resolveResalePerM2, quartierSlug } from "@/lib/zones";
-import { classifyEtat, hasAnthropicKey } from "@/lib/classify";
-import { generateProposals } from "@/lib/proposals";
+import { getZonePriceMap, resolveResalePerM2 } from "@/lib/zones";
 import { findDuplicate, type DedupCandidate } from "@/lib/dedup";
 import { getNouveautesConfig, matchesNouveautesCriteria } from "@/lib/nouveautes";
 import type { RunStats } from "@/lib/types";
@@ -220,26 +218,11 @@ export async function POST(req: NextRequest) {
       )
     );
 
-    // --- Comps (market_samples) : uniquement les biens immotop autonomes. ---
-    const samples = await Promise.all(
-      withId.map(async ({ l, lid }) => {
-        const slug = quartierSlug(l.commune);
-        const priceM2 =
-          typeof l.surface === "number" && l.surface > 0
-            ? Math.round((l.price / l.surface) * 100) / 100
-            : null;
-        const description = typeof l.description === "string" ? l.description.slice(0, 2000) : null;
-        // S14 — état lu directement chez immotop (ga4Condition) ; confiance 1.
-        const etat = (l as any).etat ?? null;
-        const r = await pool.query(
-          `INSERT INTO market_samples (listing_id, quartier_slug, price, surface, price_m2, cpe, description, url, source, etat, etat_confidence)
-           VALUES ($1, $2, $3, $4, $5, NULL, $6, $7, 'immotop', $8, $9) RETURNING id`,
-          [lid, slug, l.price, l.surface ?? null, priceM2, description, l.url ?? null, etat, etat ? 1 : null]
-        );
-        return { id: r.rows[0].id as number, description, etat };
-      })
-    );
-
+    // S16 — Immotop ne pilote PLUS le prix de revente (pas de CPE fiable, état
+    // « rénové » conflé avec le neuf). On n'alimente donc plus market_samples ni
+    // la classification LLM ni la régénération de propositions ici : c'est le
+    // relevé atHome (CPE C-F) qui s'en charge. Immotop reste pour la couverture
+    // (référentiel, carte, suivis) et les Nouveautés (findings ci-dessus).
     const mergedStats: RunStats | null = stats
       ? { ...stats, countReceived: safe.length, countIncomplete: safe.length - filtered.length }
       : null;
@@ -247,29 +230,6 @@ export async function POST(req: NextRequest) {
       `UPDATE runs SET status='done', count=$2, stats=$3, finished_at=now() WHERE id=$1`,
       [runId, withId.length, mergedStats ? JSON.stringify(mergedStats) : statsJson]
     );
-
-    // Classification LLM de l'état : seulement pour les comps SANS état immotop
-    // (ga4Condition absent ~56 % du temps). Best-effort, comme le survey.
-    if (hasAnthropicKey()) {
-      const nap = (ms: number) => new Promise((r) => setTimeout(r, ms));
-      for (const s of samples) {
-        if (s.etat || !s.description) continue;
-        try {
-          const c = await classifyEtat(s.description);
-          if (c) await pool.query(`UPDATE market_samples SET etat=$2, etat_confidence=$3 WHERE id=$1`, [s.id, c.etat, c.confidence]);
-        } catch (e) {
-          console.error("[ingest-immotop classify]", s.id, e);
-        }
-        await nap(200);
-      }
-    }
-
-    // Régénération des propositions (comps immotop frais). Best-effort.
-    try {
-      await generateProposals();
-    } catch (e) {
-      console.error("[ingest-immotop] generateProposals", e);
-    }
 
     return NextResponse.json({ ok: true, immotop: withId.length, merged });
   } catch (err: any) {
