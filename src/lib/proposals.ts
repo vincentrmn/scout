@@ -209,13 +209,26 @@ function round(n: number | null): number | null {
 /** Régénère les propositions pending pour tous les quartiers (diff ≥ 2 %). */
 export async function generateProposals(): Promise<{ created: number; total: number }> {
   const decote = await getDecote();
-  const comps = await loadComps();
+  const rawComps = await loadComps();
 
   const { rows: allZones } = await pool.query<{ id: string; parent_id: string | null; resale: string | null; announced: string | null }>(
     `SELECT id, parent_id, resale_eur_per_m2::float AS resale, announced_eur_per_m2::float AS announced FROM zones`
   );
   const cityZone = allZones.find((z) => z.parent_id == null);
   const cityDefault = cityZone?.resale != null ? Number(cityZone.resale) : 11000;
+
+  // S16 — Plafond anti-neuf/luxe : un comp affiché au-dessus de la réf Observatoire
+  // du quartier × 1,45 n'est PAS un comparable de revente rénové (c'est du neuf ou
+  // du haut de gamme — le flag isNew d'Immotop étant peu fiable, on filtre par PRIX,
+  // qui ne ment pas). Garde-fou robuste, indépendant des flags.
+  const CAP = 1.45;
+  const refMap = new Map<string, number>();
+  for (const z of allZones) if (z.announced != null && Number(z.announced) > 0) refMap.set(z.id, Number(z.announced));
+  const cityRef = cityZone?.announced != null ? Number(cityZone.announced) : null;
+  const comps = rawComps.filter((c) => {
+    const ref = refMap.get(c.quartier_slug) ?? cityRef;
+    return !ref || c.price_m2 <= ref * CAP;
+  });
 
   let created = 0;
   for (const z of allZones) {
