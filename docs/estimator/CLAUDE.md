@@ -48,11 +48,32 @@ Différent de **BBIscout** (qui cherche des deals achat-rénovation-revente à L
 
 ⚠️ **Filtres = uniquement ce qu'atHome expose dans son SRP.** Ne pas inventer de filtres non scrappables. (Immotop a moins de filtres fins ; certains critères ne s'appliqueront qu'à atHome — l'assumer dans l'UI, comme le filtre CPE/état de BBIscout.)
 
-## 4. Géographie — le gros chantier d'extension
+## 4. Géographie — le seed national (RÉSOLU, étude faite le 24/06/2026)
 
-- **atHome** : les `loc_code`/`q_code` n'existent que pour Lux-Ville dans BBIscout. Pour toutes les communes, il faut **construire la table `zones` nationale** (chaque commune = un `loc_code` L… + son `q_code` token atHome, obligatoire pour que `loc=` soit respecté). Méthode : inspecter le SRP atHome d'une commune pour récupérer son token. **Gros travail de seed.** (Le Luxembourg compte ~100 communes.)
-- **Immotop** : geo via `/api-next/geography/autocomplete/?query=<commune>` → `idComune` (type 2) + chaîne parente `fkRegione`/`idProvincia`. Le contrat est dans `docs/immotop-source2-etude.md`. Il faut mapper chaque commune → ses ids Immotop.
-- **Observatoire** : data.public.lu publie des stats **par commune** (prix annoncés + prix de vente). **C'est l'actif central de Sextant** — l'étendre de Lux-Ville à toutes les communes est prioritaire.
+**Bonne nouvelle : le seed des communes atHome est facile.** atHome expose une API de suggestion de localisations (celle de la barre de recherche) :
+
+```
+GET https://new-api-lh.prd.athome.lu/lh/v2/suggest?query=<texte>&site=lu_at_home
+Headers : UA navigateur + Accept: application/json + Origin/Referer https://www.athome.lu/
+→ { code:200, status:"SUCCESS", data:{ locations:{ towns:[ {
+     name:"Esch-sur-Sûre", hkey:"1b8a75cf", level:9, slug:"esch-sur-sure",
+     levels:{L2:"Luxembourg",L4:"Sud",L9:"Esch-sur-Sûre"},
+     slugs:{L2:"luxembourg",L4:"sud",L9:"esch-sur-sure"},
+     lat:..., lon:... }, ... ] } } }
+```
+
+- **`hkey` = le token `q`** d'atHome (ex. `33e38b1b` pour Luxembourg-Ville). C'était LA question : il est servi directement par l'API.
+- **`loc_code` = `L<level>-<slug>`** (ex. `L9-esch-sur-sure`). `level` 9 = commune.
+- Bonus : **lat/lon** du centre, et la hiérarchie (L2 pays, L4 canton, L9 commune).
+- `site=lu_at_home` est **obligatoire** (valeur exacte ; `athomelu` → 500). Vient de `config.esapi.esapiSite` dans le `__INITIAL_STATE__` du SRP.
+
+**Seed = un script one-shot** : pour chaque commune (liste publique des ~100 communes du Luxembourg, ou en bouclant sur des préfixes), appeler le suggest → insérer dans `zones` (`loc_code`, `q_code=hkey`, `lat`, `lon`, hiérarchie). Pas de scraping page-par-page. Rapide et propre.
+
+Note : le `q` est aussi lisible dans `search.resolvedLocations[].hkey` de n'importe quelle page SRP — fallback si l'API suggest change.
+
+**Immotop** : geo via `/api-next/geography/autocomplete/?query=<commune>` → `idComune` (type 2) + chaîne parente `fkRegione`/`idProvincia` (cf. `docs/immotop-source2-etude.md`). Mapper chaque commune → ses ids Immotop (un seed similaire).
+
+**Observatoire** : data.public.lu publie par **commune** (prix annoncés + prix de vente notariés). **Actif central de Sextant** — étendre de Lux-Ville à toutes les communes est prioritaire.
 
 ## 5. Méthodologie d'estimation (le produit)
 
