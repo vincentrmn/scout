@@ -71,6 +71,12 @@ Headers : UA navigateur + Accept: application/json + Origin/Referer https://www.
 
 Note : le `q` est aussi lisible dans `search.resolvedLocations[].hkey` de n'importe quelle page SRP — fallback si l'API suggest change.
 
+**⚠️ Taxonomie atHome NON uniforme (vérifié 24/06) — finesse localité :**
+- atHome descend jusqu'à la **localité** (ex. `Hassel`, `hkey:eb4c7896`, `level:9`), avec sa hiérarchie `{L2:pays, L4:région, L7:commune="Weiler-La-Tour", L9:localité="Hassel"}`. Donc **L7 = commune, L9 = localité.** Sextant peut donc estimer à la maille **localité** (ce que veut Shawna), pas seulement commune.
+- **MAIS** les grandes villes sont un cas spécial : **Luxembourg-Ville** est un L9 (la ville) avec ses **quartiers en L10** (Belair, Gasperich). Et le suggest **ne renvoie PAS** ces quartiers (`query=belair` → 0). Pour les quartiers des grandes villes → seed manuel à la BBIscout (les 26 quartiers de Lux-Ville sont déjà seedés dans `scout`).
+- **Enumération du seed** : ~600 localités au Luxembourg. Boucler le suggest sur la **liste publique des localités** (ou par préfixes a/b/c…, en dédup sur `hkey`), en filtrant `levels.L2 == "Luxembourg"` (le suggest renvoie aussi DE/BE/FR frontaliers — ex. `Hasselbach` en Allemagne). Pour chaque localité : stocker `q_code=hkey`, `loc_code=L9-<slug>`, le `L7`/commune parent, lat/lon.
+- Pour couvrir tous les biens d'une commune d'un coup, on peut aussi chercher atHome en **L7** (`loc=L7-<slug-commune>`) — à vérifier, mais le niveau commune doit agréger ses localités L9.
+
 **Immotop** : geo via `/api-next/geography/autocomplete/?query=<commune>` → `idComune` (type 2) + chaîne parente `fkRegione`/`idProvincia` (cf. `docs/immotop-source2-etude.md`). Mapper chaque commune → ses ids Immotop (un seed similaire).
 
 **Observatoire** : data.public.lu publie par **commune** (prix annoncés + prix de vente notariés). **Actif central de Sextant** — étendre de Lux-Ville à toutes les communes est prioritaire.
